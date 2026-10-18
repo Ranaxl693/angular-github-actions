@@ -1,40 +1,38 @@
 name: Angular CLI CI
-
 on:
   pull_request:
     branches: [develop]
     types: [opened, synchronize, reopened, ready_for_review]
-  workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: angular-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
-  validate:
-    name: Build and Test
+  test:
+    name: Type Check and Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
+      - run: npm ci
       - name: Type check
         run: npx tsc --noEmit -p tsconfig.app.json
-
-      - name: Run unit tests
+      - name: Unit tests
         run: npm test -- --watch=false
-
-      - name: Production build
-        run: npm run build -- --configuration production
+  build:
+    name: Common Angular Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
