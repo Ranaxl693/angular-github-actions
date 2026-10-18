@@ -173,13 +173,22 @@ if (artifactMetadata) {
     for (const app of appNames) {
       const priorOutput = join(artifactDir, app);
       const validPriorOutput = await isValidAppOutput(priorOutput, applications[app].requiredFile);
-      if (!affectedSinceArtifact.includes(app) && validPriorOutput) {
+      const affectedInPullRequest = affectedFromDevelop.includes(app);
+      const changedSinceArtifact = affectedSinceArtifact.includes(app);
+      if (!affectedInPullRequest && !changedSinceArtifact && validPriorOutput) {
         await restoreAppOutput(app, priorOutput);
         restoredApps.push(app);
         skippedApps.push(app);
         console.log(`Restored ${app} output from ${join(artifactDir, app)}.`);
       } else {
         buildApps.push(app);
+        if (!validPriorOutput) {
+          console.log(`Building ${app}: output missing or unavailable.`);
+        } else if (affectedInPullRequest) {
+          console.log(`Building ${app}: affected relative to ${buildBase}.`);
+        } else {
+          console.log(`Building ${app}: changed since the validated artifact.`);
+        }
       }
     }
   }
@@ -191,13 +200,9 @@ if (artifactMetadata) {
 }
 
 for (const app of buildApps) {
-  const reason =
-    !artifactComparisonAvailable && artifactMetadata
-      ? 'artifact comparison unavailable; rebuilding safely'
-      : artifactComparisonAvailable && affectedSinceArtifact.includes(app)
-        ? 'affected since the validated artifact'
-        : 'output missing or unavailable';
-  console.log(`Building ${app}: ${reason}`);
+  if (!artifactComparisonAvailable && artifactMetadata) {
+    console.log(`Building ${app}: artifact comparison unavailable; rebuilding safely.`);
+  }
 }
 for (const app of skippedApps) {
   console.log(`Skipping ${app} build: unchanged output restored from the validated artifact.`);
@@ -234,6 +239,7 @@ if (buildApps.length > 0) {
         `--projects=${buildApps.join(',')}`,
         '--configuration=pages',
         '--outputStyle=static',
+        '--skipNxCache',
       ],
       { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
     );
