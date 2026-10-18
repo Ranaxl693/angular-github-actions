@@ -43,6 +43,7 @@ jobs:
         run: npm run typecheck
 
   lint:
+    needs: type-check
     if: github.event_name == 'pull_request'
     name: Lint
     runs-on: ubuntu-latest
@@ -63,6 +64,7 @@ jobs:
         run: npm run lint
 
   unit-tests:
+    needs: lint
     if: github.event_name == 'pull_request'
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -83,6 +85,7 @@ jobs:
         run: npm run test:ci
 
   build:
+    needs: unit-tests
     if: github.event_name == 'pull_request'
     name: Angular Build
     runs-on: ubuntu-latest
@@ -114,7 +117,7 @@ jobs:
   publish-artifact:
     name: Publish Validated Artifact
     if: github.event_name == 'pull_request'
-    needs: [type-check, lint, unit-tests, build]
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Download staged build
