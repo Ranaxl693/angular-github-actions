@@ -31,6 +31,11 @@ const appNames = Object.keys(applications);
 const artifactDir = resolve('previous-app-builds');
 const artifactStage = resolve('dist/nx-pages-app-builds');
 const buildBase = 'origin/develop';
+const currentHead = process.env.PR_HEAD_SHA;
+
+if (!/^[0-9a-f]{40}$/i.test(currentHead || '')) {
+  throw new Error('PR_HEAD_SHA must be set to the pull request head commit SHA.');
+}
 
 function nx(args) {
   const result = spawnSync('npx', ['nx', ...args], {
@@ -54,8 +59,15 @@ function runNodeScript(scriptPath) {
   }
 }
 
-function affectedProjects(base) {
-  const output = nx(['show', 'projects', '--affected', `--base=${base}`, '--head=HEAD', '--json']);
+function affectedProjects(base, head = currentHead) {
+  const output = nx([
+    'show',
+    'projects',
+    '--affected',
+    `--base=${base}`,
+    `--head=${head}`,
+    '--json',
+  ]);
   const projects = JSON.parse(output);
   if (!Array.isArray(projects) || projects.some((project) => typeof project !== 'string')) {
     throw new Error(`Nx returned an invalid affected-project list for base ${base}`);
@@ -137,20 +149,26 @@ const restoredApps = [];
 const skippedApps = [];
 let buildApps;
 let affectedSinceArtifact = [];
+let artifactComparisonAvailable = false;
 
 if (artifactMetadata) {
   try {
-    affectedSinceArtifact = affectedProjects(artifactMetadata.commitSha);
+    const artifactHead = process.env.PREVIOUS_APP_BUILDS_HEAD_SHA || artifactMetadata.commitSha;
+    if (!/^[0-9a-f]{40}$/i.test(artifactHead)) {
+      throw new Error('Previous artifact has no valid source commit SHA.');
+    }
+    affectedSinceArtifact = affectedProjects(artifactHead);
+    artifactComparisonAvailable = true;
+    console.log(
+      `Projects affected since validated artifact ${artifactHead}: ${affectedSinceArtifact.join(', ') || 'none'}`,
+    );
   } catch (error) {
     console.warn(
       `Could not safely compare with the prior artifact; rebuilding all apps. ${error.message}`,
     );
     buildApps = [...appNames];
   }
-  if (!buildApps) {
-    console.log(
-      `Projects affected since validated artifact ${artifactMetadata.commitSha}: ${affectedSinceArtifact.join(', ') || 'none'}`,
-    );
+  if (artifactComparisonAvailable) {
     buildApps = [];
     for (const app of appNames) {
       const priorOutput = join(artifactDir, app);
@@ -174,9 +192,11 @@ if (artifactMetadata) {
 
 for (const app of buildApps) {
   const reason =
-    artifactMetadata && affectedSinceArtifact.includes(app)
-      ? 'affected since the validated artifact'
-      : 'output missing or unavailable';
+    !artifactComparisonAvailable && artifactMetadata
+      ? 'artifact comparison unavailable; rebuilding safely'
+      : artifactComparisonAvailable && affectedSinceArtifact.includes(app)
+        ? 'affected since the validated artifact'
+        : 'output missing or unavailable';
   console.log(`Building ${app}: ${reason}`);
 }
 for (const app of skippedApps) {
@@ -252,17 +272,12 @@ for (const app of appNames) {
   }
   await cp(source, join(artifactStage, app), { recursive: true });
 }
-if (!/^[0-9a-f]{40}$/i.test(process.env.GITHUB_SHA || '')) {
-  throw new Error(
-    'GITHUB_SHA must be set to a 40-character commit SHA to create a reusable artifact.',
-  );
-}
 await writeFile(
   join(artifactStage, 'build-metadata.json'),
   `${JSON.stringify(
     {
       schemaVersion: 1,
-      commitSha: process.env.GITHUB_SHA,
+      commitSha: currentHead,
       configuration: 'pages',
       projects: appNames,
     },
