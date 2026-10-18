@@ -603,7 +603,7 @@ jobs:
           import shutil
           from pathlib import Path
 
-          folders = {'CIT': 'cit', 'DEV': 'dev', 'QA': 'qa', 'PRODUCTION': 'production'}
+          folders = {'CIT': 'cit', 'DEV': 'dev', 'SIT': 'sit', 'QA': 'qa', 'PRODUCTION': 'production', 'PROD': 'production'}
           folder = folders[os.environ['SELECTED_ENVIRONMENT']]
           site = Path(os.environ['SITE_ROOT'])
           artifact = Path(os.environ['ARTIFACT_ROOT'])
