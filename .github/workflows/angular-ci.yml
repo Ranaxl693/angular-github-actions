@@ -32,6 +32,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Show CI commands and execution scope
+        shell: bash
+        run: |
+          {
+            echo '### Commands executed by CI'
+            echo ''
+            echo '| Step | Command | Purpose |'
+            echo '| --- | --- | --- |'
+            echo '| Install dependencies | `npm ci` | Install locked dependencies |'
+            echo '| Type Check | `npx nx affected -t typecheck --base=origin/develop --head=HEAD --outputStyle=static` | Validate affected TypeScript projects |'
+            echo '| Lint | `npx nx affected -t lint --base=origin/develop --head=HEAD --outputStyle=static` | Lint affected projects |'
+            echo '| Unit Tests | `npx nx affected -t test --base=origin/develop --head=HEAD --outputStyle=static` | Test affected projects |'
+            echo '| Affected scope | `npx nx show projects --affected --base=origin/develop --head=HEAD --json` | Report affected projects |'
+            echo '| Affected Build | `npx nx affected -t build --base=origin/develop --head=HEAD --outputStyle=static` | Build affected projects |'
+            echo '| Complete Pages package | `npm run build:pages` | Build all deployable apps and package them |'
+            echo '| Browser installation | `npm exec -- playwright install --with-deps chromium` | Install E2E browser |'
+            echo '| Browser E2E | `npm run e2e` | Test complete federated app |'
+            echo ''
+            echo '> This table reflects the configured CI commands. Nx determines the projects and dependent tasks actually executed.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Validate affected type check targets
         shell: bash
         run: |
