@@ -50,29 +50,27 @@ jobs:
           set -euo pipefail
           npx nx affected -t test --base=origin/develop --head=HEAD --outputStyle=static
 
-      - name: Compare PR-wide and isolated MFE1 affected projects
+      - name: Report Nx affected scope and savings
         shell: bash
         run: |
           set -euo pipefail
-          echo "### Nx affected project comparison" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Full PR against develop** (the actual CI validation scope):" >> "$GITHUB_STEP_SUMMARY"
-          echo '~~~~text' >> "$GITHUB_STEP_SUMMARY"
-          npx nx show projects --affected --base=origin/develop --head=HEAD --outputStyle=static | tee nx-pr-affected.txt
-          cat nx-pr-affected.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '~~~~' >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          MFE_COMMIT=$(git log -1 --format=%H -- apps/mfe1/src/app/app.ts)
-          MFE_BASE=$(git rev-parse "${MFE_COMMIT}^")
-          echo "**Isolated MFE1 app.ts commit** (${MFE_COMMIT:0:8} vs parent ${MFE_BASE:0:8}):" >> "$GITHUB_STEP_SUMMARY"
-          echo '~~~~text' >> "$GITHUB_STEP_SUMMARY"
-          git diff --name-only "$MFE_BASE" "$MFE_COMMIT" | tee nx-mfe1-changed-files.txt
-          echo "Changed files:" >> "$GITHUB_STEP_SUMMARY"
-          cat nx-mfe1-changed-files.txt >> "$GITHUB_STEP_SUMMARY"
-          echo "Affected projects:" >> "$GITHUB_STEP_SUMMARY"
-          npx nx show projects --affected --base="$MFE_BASE" --head="$MFE_COMMIT" --outputStyle=static | tee nx-mfe1-affected.txt
-          cat nx-mfe1-affected.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '~~~~' >> "$GITHUB_STEP_SUMMARY"
+          npx nx show projects --json > nx-all-projects.json
+          npx nx show projects --affected --base=origin/develop --head=HEAD --json > nx-affected-projects.json
+          python3 - <<'PY'
+          import json, os
+          all_projects = set(json.load(open("nx-all-projects.json")))
+          affected = set(json.load(open("nx-affected-projects.json")))
+          skipped = sorted(all_projects - affected)
+          summary = os.environ["GITHUB_STEP_SUMMARY"]
+          with open(summary, "a") as out:
+              out.write("### Nx affected scope (actual PR vs develop)\\n")
+              out.write(f"- Workspace projects: **{len(all_projects)}**\\n")
+              out.write(f"- Affected projects: **{len(affected)}** — {', '.join(sorted(affected)) or 'none'}\\n")
+              out.write(f"- Unaffected projects: **{len(skipped)}** — {', '.join(skipped) or 'none'}\\n")
+              out.write(f"- Projects excluded from affected selection: **{len(skipped)}/{len(all_projects)}**\\n")
+              out.write("- These counts show affected selection, **not** cache hits or total builds skipped.\\n")
+              out.write("- The complete Pages packaging build remains enabled for deployable artifacts.\\n")
+          PYTHON
 
       - name: Validate affected build targets
         id: nx-run
