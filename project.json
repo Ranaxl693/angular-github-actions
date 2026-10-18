@@ -1,0 +1,35 @@
+{
+  "name": "angular-github-actions",
+  "root": ".",
+  "sourceRoot": "src",
+  "projectType": "application",
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run typecheck"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run lint"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run test:ci"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": [
+        "{workspaceRoot}/dist/angular-github-actions/browser"
+      ],
+      "options": {
+        "command": "npm run build:pages"
+      }
+    }
+  }
+}
