@@ -1,8 +1,9 @@
 name: Nx Angular CI (Multi Runner)
 
 on:
-  push:
-    branches: [feature/op-nx-github-cache-poc]
+  pull_request:
+    branches: [develop]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
