@@ -1,6 +1,8 @@
 name: Nx Angular CI
 
 on:
+  push:
+    branches: [feature/op-nx-github-cache-poc]
   pull_request:
     branches: [develop]
     types: [opened, synchronize, reopened, ready_for_review]
@@ -17,9 +19,12 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     name: Validate and Build (single runner)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     env:
       NX_CLOUD: 'false'
       NX_DAEMON: 'false'
@@ -38,6 +43,35 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Configure Nx GitHub remote cache
+        shell: bash
+        run: |
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+
+      - name: Start GitHub-backed Nx cache sidecar
+        uses: op-nx/github-cache/start-cache-server@6c198f0aaef17b0ce75cf28448efc38075d39b01
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for Nx remote cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            status="$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)"
+            if [[ "$status" == "404" || "$status" == "200" ]]; then exit 0; fi
+            sleep 1
+          done
+          echo "Nx cache sidecar did not become ready (HTTP ${status})" >&2
+          exit 1
 
       - name: Show CI commands and execution scope
         shell: bash
@@ -109,6 +143,8 @@ jobs:
           npx nx affected -t build --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-build.log
           echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
 
+      - cancel: cache-server
+
       - name: Nx cache and execution summary
         if: always()
         shell: bash
@@ -117,7 +153,7 @@ jobs:
         run: |
           {
             echo "### Nx Angular Build"
-            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
+            echo "- npm dependency downloads cached by setup-node; Nx task cache uses GitHub-backed remote caching."
             echo "- Nx affected execution: ${DURATION:-not completed} seconds"
             if [[ -f nx-build.log ]]; then
               echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-build.log || true)"
@@ -129,6 +165,9 @@ jobs:
     name: Build and E2E Test Complete Pages Site
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     env:
       NX_CLOUD: 'false'
       NX_DAEMON: 'false'
@@ -144,6 +183,35 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Configure Nx GitHub remote cache
+        shell: bash
+        run: |
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          token="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::${token}"
+          echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=${token}" >> "$GITHUB_ENV"
+
+      - name: Start GitHub-backed Nx cache sidecar
+        uses: op-nx/github-cache/start-cache-server@6c198f0aaef17b0ce75cf28448efc38075d39b01
+        id: cache-server
+        background: true
+        with:
+          port: '3000'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for Nx remote cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            status="$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN}" "${NX_SELF_HOSTED_REMOTE_CACHE_SERVER}/v1/cache/deadbeef" || true)"
+            if [[ "$status" == "404" || "$status" == "200" ]]; then exit 0; fi
+            sleep 1
+          done
+          echo "Nx cache sidecar did not become ready (HTTP ${status})" >&2
+          exit 1
 
       - name: Package complete Pages build
         run: npm run build:pages
@@ -161,6 +229,8 @@ jobs:
           path: dist/angular-github-actions/browser
           if-no-files-found: error
           retention-days: 30
+
+      - cancel: cache-server
 
   deploy-cit:
     name: Deploy CIT to GitHub Pages
