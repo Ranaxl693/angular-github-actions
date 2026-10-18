@@ -119,4 +119,4 @@ only after all three pass. Push another commit to rerun the checks. A validation
 failure should leave **Angular Build** skipped. No merge or deployment is performed.
 
 If branch protection requires the old combined check name, update that rule to
-require the new check names so the PR is evaluated against the current workflows.
+require the new check names so the PR is evaluated against the current workflowss.
