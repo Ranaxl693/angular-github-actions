@@ -24,7 +24,7 @@ jobs:
       - name: Unit tests
         run: npm test -- --watch=false
   build:
-    name: Common Angular Build
+    name: Angular Build
     needs: test
     runs-on: ubuntu-latest
     steps:
