@@ -1,0 +1,11 @@
+<app-ui-card title="MFE 1 · Products">
+  <p>This product list is loaded from the mfe1 remote.</p>
+  <ul>
+    @for (product of products; track product) {
+      <li>{{ product }} <button type="button" (click)="workspace.addItem()">Add item</button></li>
+    }
+  </ul>
+  <p>
+    Selected items: <strong>{{ workspace.selectedCount() }}</strong>
+  </p>
+</app-ui-card>

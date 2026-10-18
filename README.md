@@ -1,122 +1,160 @@
-# angular-github-actions
-Test Github Action
+# Angular Native Federation monorepo
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.3.
+Angular 22.2 applications orchestrated by Nx 23, with Native Federation 22.2.
+The original Angular app is now the host in `apps/host`.
 
-## Prerequisites
+## Workspace layout
 
-Use Node.js 24.18.0 (pinned in `.nvmrc`). With nvm, run `nvm install` and `nvm use`. Install dependencies with `npm ci`.
+```text
+apps/
+  host/       Host, navigation, runtime federation manifest (port 4200)
+  mfe1/       Products micro frontend (port 4201)
+  mfe2/       Selection micro frontend (port 4202)
+libs/
+  lib-core/   Shared WorkspaceState service
+  lib-ui/     Reusable standalone Card component
+  .../project.json    Each library and app owns its Nx targets
+tools/
+  federation.config.mjs   Common singleton/dependency-sharing configuration
+  package-pages.mjs       Assemble the host and both remote builds
+  preview-pages.mjs       Local static preview under a Pages-style subfolder
+e2e/                     Playwright federation smoke tests
+```
 
-## Development server
+All five projects have their own Nx build, typecheck, lint and test targets.
+Angular CLI's modern application builder and the existing Vitest setup are retained.
+Nx invokes the Angular builders through `nx:run-commands`, schedules dependencies,
+and caches successful tasks. No Nx Cloud account is required.
 
-To start a local development server, run:
+## Start all applications
+
+Use Node.js **24.18.0**, pinned in `.nvmrc`:
 
 ```bash
+nvm install
+nvm use
 npm ci
 npm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Open **http://localhost:4200**. The same command starts both remotes too:
 
-## Code scaffolding
+| Application | Standalone URL        | Host route |
+| ----------- | --------------------- | ---------- |
+| Host        | http://localhost:4200 | `/`        |
+| MFE 1       | http://localhost:4201 | `/mfe1`    |
+| MFE 2       | http://localhost:4202 | `/mfe2`    |
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+To start them in separate terminals, use `npm run start:host`,
+`npm run start:mfe1`, and `npm run start:mfe2`.
 
-```bash
-ng generate component component-name
+Select **MFE 1 · Products** and add an item. The host's counter updates.
+Switch to **MFE 2 · Selection** to see the same count, then clear it.
+State is shared within a host page and resets on refresh. Separately opened
+standalone app pages have their own injectors and state.
+
+## How Native Federation is connected
+
+Each app has a `federation.config.mjs` and `tsconfig.federation.json`.
+The remotes expose their standalone root component as `./Component`.
+The host reads `apps/host/public/federation.manifest.json`, initializes the
+federation runtime **before** importing Angular's `bootstrap.ts`, and passes
+that runtime explicitly into its lazy route configuration.
+
+The host does not import the remotes' source code. At runtime it loads their
+`remoteEntry.json` manifests and exposed JavaScript modules. Angular, RxJS,
+`@workspace/lib-core`, and `@workspace/lib-ui` are shared. The workspace library
+aliases are defined in root `tsconfig.json`, and shared mappings are configured
+as singletons so the host and remote components use the same service identity.
+
+`lib-core` exports `WorkspaceState`; `lib-ui` exports `Card`.
+Import them through their public APIs:
+
+```typescript
+import { WorkspaceState } from '@workspace/lib-core';
+import { Card } from '@workspace/lib-ui';
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Library builds use Angular's compiler with partial compilation. They are internal
+workspace libraries; publishing npm packages is not configured. Their federation
+mapping version is `1.0.0` in `tools/federation.config.mjs`; change that version
+consistently across deployments if the shared APIs become incompatible.
+
+## Nx commands
 
 ```bash
-ng generate --help
+npm run typecheck       # All five projects, without emitting files
+npm run lint            # TypeScript, external and inline Angular templates
+npm run test:ci         # All five Vitest suites, no watch mode
+npm run build           # Build libraries, then all three production apps
+npm run graph           # Interactive Nx project graph
+npx nx build mfe1        # Build one remote and its library dependencies
+npx nx test lib-core     # Test one library
+npx nx affected -t lint,test,build --base=origin/develop
 ```
 
-## Building
+Nx caches builds, type checks, linting and tests in `.nx/cache` and invalidates
+consumers when library inputs change. `host`, `mfe1`, and `mfe2` explicitly depend
+on both libraries in their project configuration. A second unchanged build should
+report cache hits. Serve targets are continuous and are not cached.
 
-To build the project run:
+Production outputs are `dist/angular-github-actions/browser` for the host and
+`dist/apps/mfe1/browser`, `dist/apps/mfe2/browser` for the remotes.
+Development builds use `dist/dev/<app>` so live dev servers do not overwrite
+production artifacts.
+
+The host's existing `development`, `cit`, `dev` and `production` Angular
+configurations remain in `angular.json`. Use an explicit project with Angular
+CLI commands, for example `npx ng build host --configuration=cit`.
+
+## GitHub Pages bundle and browser tests
 
 ```bash
-ng build
+npm run build:pages
+npx playwright install chromium
+npm run e2e
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+`build:pages` builds all three apps with `baseHref: './'`, then places the remotes
+under the host output and writes a same-origin runtime manifest:
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
+```text
+dist/angular-github-actions/browser/
+  index.html
+  remoteEntry.json
+  federation.manifest.json
+  remotes/
+    mfe1/remoteEntry.json
+    mfe2/remoteEntry.json
 ```
 
-## Running end-to-end tests
+`npm run e2e` starts a static preview automatically at
+`http://127.0.0.1:4400/angular-github-actions/cit/`. It tests both remotes, shared
+state across remote navigation, route refresh, and standalone remote launches.
+The test uses a real subfolder to catch base-path regressions.
 
-For end-to-end (e2e) testing, run:
+If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run e2e`
+can use it instead of downloading Chromium.
 
-```bash
-ng e2e
-```
+For an interactive preview, run `npm run preview:pages` after building.
+Host routes use normal paths without a hash. The Pages packaging step creates
+`mfe1/index.html` and `mfe2/index.html` with a parent-relative base path so direct
+links and refreshes also work on static hosting. Add matching route entry files
+when introducing new host routes.
+The relative manifest and asset paths work inside the existing environment folders.
+Environment folder selection does not rebuild or change the runtime manifest.
+To deploy remotes separately later, replace their URLs in the deployed
+`federation.manifest.json` and configure CORS on the remote servers.
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+## Existing GitHub Actions integration
 
-## Additional Resources
+`.github/workflows/angular-ci.yml` keeps the current PR triggers, check ordering,
+artifact names, deployment jobs and environment settings. The existing npm
+commands now check all five projects through Nx. Nx caching is local to each
+runner; shared remote caching is not configured. Existing npm download caching
+is retained. The build job compiles all apps, installs Chromium and
+runs the federation browser tests before uploading the artifact.
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
-
-## Pull request CI
-
-`.github/workflows/angular-ci.yml` checks pull requests targeting `develop` on
-`opened`, `synchronize` (new commits), `reopened`, and `ready_for_review` events.
-It has no push trigger, environment selection, or deployment step.
-
-Three independent jobs run in parallel:
-
-| Job/check name | Command | Purpose |
-| --- | --- | --- |
-| Type Check | `npm run typecheck` | Check `tsconfig.app.json` without emitting files |
-| Lint | `npm run lint` | Check TypeScript and Angular templates with ESLint |
-| Unit Tests | `npm run test:ci` | Run the existing Vitest suite once, without watching |
-
-**Angular Build** depends on all three jobs using
-`needs: [type-check, lint, unit-tests]`. It runs `npm run build` only when every
-validation job succeeds. A failed or skipped validation prevents the build;
-a failed build fails the workflow. Each job reports its own status in GitHub.
-A validation failure does not cancel the other independent validation jobs.
-
-Every job checks out the repository, loads Node from `.nvmrc`, enables npm's
-download cache, and runs `npm ci` on its own runner. The cache speeds up downloads;
-it does not share `node_modules` between runners. Repository contents are
-read-only for the workflow token. A newer run for the same pull request cancels
-the older run to avoid redundant checks.
-
-`eslint.config.cjs` applies the recommended ESLint, TypeScript, Angular TypeScript,
-Angular template, and template accessibility rules. Both external templates and
-inline component templates are checked. Generated output is ignored. Warnings
-also fail `npm run lint`; no checks are bypassed to make CI pass.
-
-### Run the checks locally
-
-```bash
-nvm use
-npm ci
-npm run typecheck
-npm run lint
-npm run test:ci
-npm run build
-```
-
-The checks can be run independently. The build uses the existing default Angular
-configuration (`production`); existing local environment configurations remain
-available in `angular.json` but are not selected by CI.
-
-### Verify in GitHub
-
-Push the `feature/github-actions` branch and open a PR targeting `develop`.
-In the PR's Checks tab or **Actions → Angular CLI CI**, confirm that **Type Check**,
-**Lint**, and **Unit Tests** start independently, then **Angular Build** starts
-only after all three pass. Push another commit to rerun the checks. A validation
-failure should leave **Angular Build** skipped. No merge or deployment is performed.
-
-If branch protection requires the old combined check name, update that rule to
-require the new check names so the PR is evaluated against the current workflows.
+The Pages artifact path remains `dist/angular-github-actions/browser`, so existing
+folder deployment steps copy the host **and both remotes** together. No additional
+workflow, deployment provider, or approval rule is introduced by this migration.

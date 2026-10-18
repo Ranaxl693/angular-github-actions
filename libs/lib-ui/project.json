@@ -1,0 +1,35 @@
+{
+  "name": "lib-ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "root": "libs/lib-ui",
+  "sourceRoot": "libs/lib-ui/src",
+  "projectType": "library",
+  "tags": ["type:lib"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p libs/lib-ui/tsconfig.lib.json"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint \"libs/lib-ui/src/**/*.{ts,html}\" --max-warnings=0"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng test lib-ui --watch=false"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ngc -p libs/lib-ui/tsconfig.lib.json"
+      },
+      "outputs": ["{workspaceRoot}/dist/libs/lib-ui"]
+    }
+  }
+}

@@ -4,29 +4,36 @@
   "cli": {
     "packageManager": "npm"
   },
-  "newProjectRoot": "projects",
+  "newProjectRoot": "apps",
   "projects": {
-    "angular-github-actions": {
+    "host": {
       "projectType": "application",
       "schematics": {},
-      "root": "",
-      "sourceRoot": "src",
+      "root": "apps/host",
+      "sourceRoot": "apps/host/src",
       "prefix": "app",
       "architect": {
-        "build": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "host:esbuild:development",
+            "tsConfig": "apps/host/tsconfig.spec.json"
+          }
+        },
+        "esbuild": {
           "builder": "@angular/build:application",
           "options": {
-            "browser": "src/main.ts",
-            "tsConfig": "tsconfig.app.json",
+            "browser": "apps/host/src/main.ts",
+            "tsConfig": "apps/host/tsconfig.app.json",
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "apps/host/public"
               }
             ],
-            "styles": [
-              "src/styles.css"
-            ]
+            "styles": ["apps/host/src/styles.css"],
+            "outputPath": "dist/angular-github-actions",
+            "polyfills": ["es-module-shims"]
           },
           "configurations": {
             "production": {
@@ -45,8 +52,8 @@
               "outputHashing": "all",
               "fileReplacements": [
                 {
-                  "replace": "src/environments/environment.ts",
-                  "with": "src/environments/environment.production.ts"
+                  "replace": "apps/host/src/environments/environment.ts",
+                  "with": "apps/host/src/environments/environment.production.ts"
                 }
               ]
             },
@@ -56,10 +63,11 @@
               "sourceMap": true,
               "fileReplacements": [
                 {
-                  "replace": "src/environments/environment.ts",
-                  "with": "src/environments/environment.dev.ts"
+                  "replace": "apps/host/src/environments/environment.ts",
+                  "with": "apps/host/src/environments/environment.dev.ts"
                 }
-              ]
+              ],
+              "outputPath": "dist/dev/host"
             },
             "cit": {
               "optimization": false,
@@ -72,34 +80,357 @@
               "sourceMap": true,
               "fileReplacements": [
                 {
-                  "replace": "src/environments/environment.ts",
-                  "with": "src/environments/environment.dev.ts"
+                  "replace": "apps/host/src/environments/environment.ts",
+                  "with": "apps/host/src/environments/environment.dev.ts"
                 }
               ]
+            },
+            "pages": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "apps/host/src/environments/environment.ts",
+                  "with": "apps/host/src/environments/environment.production.ts"
+                }
+              ],
+              "baseHref": "./"
             }
           },
           "defaultConfiguration": "production"
         },
-        "serve": {
+        "build": {
+          "builder": "@angular-architects/native-federation:build",
+          "options": {
+            "cacheExternalArtifacts": true,
+            "tsConfig": "apps/host/tsconfig.federation.json"
+          },
+          "configurations": {
+            "production": {
+              "target": "host:esbuild:production"
+            },
+            "development": {
+              "target": "host:esbuild:development"
+            },
+            "cit": {
+              "target": "host:esbuild:cit"
+            },
+            "dev": {
+              "target": "host:esbuild:dev"
+            },
+            "pages": {
+              "target": "host:esbuild:pages"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve-original": {
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "angular-github-actions:build:production"
+              "buildTarget": "host:esbuild:production"
             },
             "development": {
-              "buildTarget": "angular-github-actions:build:development"
+              "buildTarget": "host:esbuild:development"
             },
             "cit": {
-              "buildTarget": "angular-github-actions:build:cit"
+              "buildTarget": "host:esbuild:cit"
             },
             "dev": {
-              "buildTarget": "angular-github-actions:build:dev"
+              "buildTarget": "host:esbuild:dev"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "port": 4200
+          }
         },
+        "serve": {
+          "builder": "@angular-architects/native-federation:build",
+          "options": {
+            "target": "host:serve-original:development",
+            "tsConfig": "apps/host/tsconfig.federation.json",
+            "rebuildDelay": 500,
+            "cacheExternalArtifacts": true,
+            "dev": true,
+            "devServer": true,
+            "port": 0
+          }
+        }
+      }
+    },
+    "mfe1": {
+      "projectType": "application",
+      "schematics": {},
+      "root": "apps/mfe1",
+      "sourceRoot": "apps/mfe1/src",
+      "prefix": "app",
+      "architect": {
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "mfe1:esbuild:development",
+            "tsConfig": "apps/mfe1/tsconfig.spec.json"
+          }
+        },
+        "esbuild": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "apps/mfe1/src/main.ts",
+            "tsConfig": "apps/mfe1/tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/mfe1/public"
+              }
+            ],
+            "styles": ["apps/mfe1/src/styles.css"],
+            "polyfills": ["es-module-shims"],
+            "outputPath": "dist/apps/mfe1"
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "outputPath": "dist/dev/mfe1"
+            },
+            "pages": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all",
+              "baseHref": "./"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "build": {
+          "builder": "@angular-architects/native-federation:build",
+          "options": {
+            "cacheExternalArtifacts": true,
+            "tsConfig": "apps/mfe1/tsconfig.federation.json"
+          },
+          "configurations": {
+            "production": {
+              "target": "mfe1:esbuild:production"
+            },
+            "development": {
+              "target": "mfe1:esbuild:development"
+            },
+            "pages": {
+              "target": "mfe1:esbuild:pages"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve-original": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "mfe1:esbuild:production"
+            },
+            "development": {
+              "buildTarget": "mfe1:esbuild:development"
+            }
+          },
+          "defaultConfiguration": "development",
+          "options": {
+            "port": 4201
+          }
+        },
+        "serve": {
+          "builder": "@angular-architects/native-federation:build",
+          "options": {
+            "target": "mfe1:serve-original:development",
+            "tsConfig": "apps/mfe1/tsconfig.federation.json",
+            "rebuildDelay": 500,
+            "cacheExternalArtifacts": true,
+            "dev": true,
+            "devServer": true,
+            "port": 0
+          }
+        }
+      }
+    },
+    "mfe2": {
+      "projectType": "application",
+      "schematics": {},
+      "root": "apps/mfe2",
+      "sourceRoot": "apps/mfe2/src",
+      "prefix": "app",
+      "architect": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "mfe2:esbuild:development",
+            "tsConfig": "apps/mfe2/tsconfig.spec.json"
+          }
+        },
+        "esbuild": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "apps/mfe2/src/main.ts",
+            "tsConfig": "apps/mfe2/tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/mfe2/public"
+              }
+            ],
+            "styles": ["apps/mfe2/src/styles.css"],
+            "polyfills": ["es-module-shims"],
+            "outputPath": "dist/apps/mfe2"
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "outputPath": "dist/dev/mfe2"
+            },
+            "pages": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all",
+              "baseHref": "./"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "build": {
+          "builder": "@angular-architects/native-federation:build",
+          "options": {
+            "cacheExternalArtifacts": true,
+            "tsConfig": "apps/mfe2/tsconfig.federation.json"
+          },
+          "configurations": {
+            "production": {
+              "target": "mfe2:esbuild:production"
+            },
+            "development": {
+              "target": "mfe2:esbuild:development"
+            },
+            "pages": {
+              "target": "mfe2:esbuild:pages"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve-original": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "mfe2:esbuild:production"
+            },
+            "development": {
+              "buildTarget": "mfe2:esbuild:development"
+            }
+          },
+          "defaultConfiguration": "development",
+          "options": {
+            "port": 4202
+          }
+        },
+        "serve": {
+          "builder": "@angular-architects/native-federation:build",
+          "options": {
+            "target": "mfe2:serve-original:development",
+            "tsConfig": "apps/mfe2/tsconfig.federation.json",
+            "rebuildDelay": 500,
+            "cacheExternalArtifacts": true,
+            "dev": true,
+            "devServer": true,
+            "port": 0
+          }
+        }
+      }
+    },
+    "lib-core": {
+      "projectType": "library",
+      "root": "libs/lib-core",
+      "sourceRoot": "libs/lib-core/src",
+      "architect": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "host:esbuild:development",
+            "tsConfig": "libs/lib-core/tsconfig.spec.json"
+          }
+        }
+      }
+    },
+    "lib-ui": {
+      "projectType": "library",
+      "root": "libs/lib-ui",
+      "sourceRoot": "libs/lib-ui/src",
+      "architect": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "host:esbuild:development",
+            "tsConfig": "libs/lib-ui/tsconfig.spec.json"
+          }
         }
       }
     }

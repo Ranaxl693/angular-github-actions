@@ -3,6 +3,10 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
+    "paths": {
+      "@workspace/lib-core": ["./libs/lib-core/src/index.ts"],
+      "@workspace/lib-ui": ["./libs/lib-ui/src/index.ts"]
+    },
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
@@ -21,11 +25,27 @@
   },
   "files": [],
   "references": [
+    { "path": "./libs/lib-core/tsconfig.lib.json" },
+    { "path": "./libs/lib-core/tsconfig.spec.json" },
+    { "path": "./libs/lib-ui/tsconfig.lib.json" },
+    { "path": "./libs/lib-ui/tsconfig.spec.json" },
     {
-      "path": "./tsconfig.app.json"
+      "path": "./apps/host/tsconfig.app.json"
     },
     {
-      "path": "./tsconfig.spec.json"
+      "path": "./apps/host/tsconfig.spec.json"
+    },
+    {
+      "path": "./apps/mfe1/tsconfig.app.json"
+    },
+    {
+      "path": "./apps/mfe1/tsconfig.spec.json"
+    },
+    {
+      "path": "./apps/mfe2/tsconfig.app.json"
+    },
+    {
+      "path": "./apps/mfe2/tsconfig.spec.json"
     }
   ]
 }

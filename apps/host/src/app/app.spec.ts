@@ -1,13 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { App } from './app';
+import { provideRouter } from '@angular/router';
 import { environment } from '../environments/environment';
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
-    })
-      .compileComponents();
+      providers: [provideRouter([])],
+    }).compileComponents();
   });
 
   it('should create the app', () => {
@@ -20,8 +21,9 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('[data-testid="environment-name"]')?.textContent?.trim())
-      .toBe(`Environment: ${environment.environmentName}`);
+    expect(compiled.querySelector('[data-testid="environment-name"]')?.textContent?.trim()).toBe(
+      `Environment: ${environment.environmentName}`,
+    );
   });
 
   it('should render title', async () => {

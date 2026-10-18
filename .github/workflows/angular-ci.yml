@@ -1,4 +1,4 @@
-name: Angular CLI CI
+name: Nx Angular CI
 
 on:
   pull_request:
@@ -9,76 +9,19 @@ permissions:
   contents: read
 
 jobs:
-  type-check:
-    if: github.event_name == 'pull_request'
-    name: Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type Check
-        run: npm run typecheck
-
-  lint:
-    needs: type-check
-    if: github.event_name == 'pull_request'
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-  unit-tests:
-    needs: lint
-    if: github.event_name == 'pull_request'
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Unit Tests
-        run: npm run test:ci
-
   build:
-    needs: unit-tests
     if: github.event_name == 'pull_request'
-    name: Angular Build
+    name: Validate and Build (single runner)
     runs-on: ubuntu-latest
+    env:
+      NX_CLOUD: 'false'
+      NX_DAEMON: 'false'
+      NX_CACHE_DIRECTORY: ${{ github.workspace }}/.nx/cache
     steps:
-      - name: Checkout
+      - name: Checkout full history for Nx affected
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node and npm cache
         uses: actions/setup-node@v4
@@ -89,10 +32,102 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Angular Build
+      - name: Show CI commands and execution scope
+        shell: bash
+        run: |
+          {
+            echo '### Commands executed by CI'
+            echo ''
+            echo '| Step | Command | Purpose |'
+            echo '| --- | --- | --- |'
+            echo '| Install dependencies | `npm ci` | Install locked dependencies |'
+            echo '| Type Check | `npx nx affected -t typecheck --base=origin/develop --head=HEAD --outputStyle=static` | Validate affected TypeScript projects |'
+            echo '| Lint | `npx nx affected -t lint --base=origin/develop --head=HEAD --outputStyle=static` | Lint affected projects |'
+            echo '| Unit Tests | `npx nx affected -t test --base=origin/develop --head=HEAD --outputStyle=static` | Test affected projects |'
+            echo '| Affected scope | `npx nx show projects --affected --base=origin/develop --head=HEAD --json` | Report affected projects |'
+            echo '| Affected Build | `npx nx affected -t build --base=origin/develop --head=HEAD --outputStyle=static` | Build affected projects |'
+            echo '| Complete Pages package | `npm run build:pages` | Build all deployable apps and package them |'
+            echo '| Browser installation | `npm exec -- playwright install --with-deps chromium` | Install E2E browser |'
+            echo '| Browser E2E | `npm run e2e` | Test complete federated app |'
+            echo ''
+            echo '> This table reflects the configured CI commands. Nx determines the projects and dependent tasks actually executed.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate affected type check targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx nx affected -t typecheck --base=origin/develop --head=HEAD --outputStyle=static
+
+      - name: Validate affected lint targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx nx affected -t lint --base=origin/develop --head=HEAD --outputStyle=static
+
+      - name: Validate affected unit tests targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx nx affected -t test --base=origin/develop --head=HEAD --outputStyle=static
+
+      - name: Report Nx affected scope and savings
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx nx show projects --json > nx-all-projects.json
+          npx nx show projects --affected --base=origin/develop --head=HEAD --json > nx-affected-projects.json
+          python3 - <<'PY'
+          import json, os
+          all_projects = set(json.load(open("nx-all-projects.json")))
+          affected = set(json.load(open("nx-affected-projects.json")))
+          skipped = sorted(all_projects - affected)
+          summary = os.environ["GITHUB_STEP_SUMMARY"]
+          with open(summary, "a") as out:
+              out.write("### Nx affected scope (actual PR vs develop)\n")
+              out.write(f"- Workspace projects: **{len(all_projects)}**\n")
+              out.write(f"- Affected projects: **{len(affected)}** — {', '.join(sorted(affected)) or 'none'}\n")
+              out.write(f"- Unaffected projects: **{len(skipped)}** — {', '.join(skipped) or 'none'}\n")
+              out.write(f"- Projects excluded from affected selection: **{len(skipped)}/{len(all_projects)}**\n")
+              out.write("- These counts show affected selection, **not** cache hits or total builds skipped.\n")
+              out.write("- The complete Pages packaging build remains enabled for deployable artifacts.\n")
+          PY
+
+      - name: Validate affected build targets
+        id: nx-run
+        shell: bash
+        run: |
+          set -o pipefail
+          start=$(date +%s)
+          npx nx affected -t build --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-build.log
+          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+
+      - name: Nx cache and execution summary
+        if: always()
+        shell: bash
+        env:
+          DURATION: ${{ steps.nx-run.outputs.duration }}
+        run: |
+          {
+            echo "### Nx Angular Build"
+            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
+            echo "- Nx affected execution: ${DURATION:-not completed} seconds"
+            if [[ -f nx-build.log ]]; then
+              echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-build.log || true)"
+            fi
+            echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Deployment needs all three apps, even when only a subset was affected.
+      - name: Package complete Pages build
         run: npm run build:pages
 
-      # Transport the parallel build output; only the gated job publishes a deployable artifact.
+      - name: Install browser for federation checks
+        run: npm exec -- playwright install --with-deps chromium
+
+      - name: Verify federated application in a browser
+        run: npm run e2e
+
       - name: Stage build output
         uses: actions/upload-artifact@v4
         with:
@@ -314,7 +349,7 @@ jobs:
           import shutil
           from pathlib import Path
 
-          folders = {'CIT': 'cit', 'DEV': 'dev', 'QA': 'qa', 'PRODUCTION': 'production'}
+          folders = {'CIT': 'cit', 'DEV': 'dev', 'SIT': 'sit', 'QA': 'qa', 'PRODUCTION': 'production', 'PROD': 'production'}
           folder = folders[os.environ['SELECTED_ENVIRONMENT']]
           site = Path(os.environ['SITE_ROOT'])
           artifact = Path(os.environ['ARTIFACT_ROOT'])
@@ -442,7 +477,7 @@ jobs:
           import shutil
           from pathlib import Path
 
-          folders = {'CIT': 'cit', 'DEV': 'dev', 'QA': 'qa', 'PRODUCTION': 'production'}
+          folders = {'CIT': 'cit', 'DEV': 'dev', 'SIT': 'sit', 'QA': 'qa', 'PRODUCTION': 'production', 'PROD': 'production'}
           folder = folders[os.environ['SELECTED_ENVIRONMENT']]
           site = Path(os.environ['SITE_ROOT'])
           artifact = Path(os.environ['ARTIFACT_ROOT'])
@@ -504,7 +539,6 @@ jobs:
           folder="${SELECTED_ENVIRONMENT,,}"
           echo "Deployed URL: ${PAGE_URL%/}/$folder/"
           echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
-
 
   deploy-prod:
     name: Deploy PROD to GitHub Pages

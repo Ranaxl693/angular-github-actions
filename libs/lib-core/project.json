@@ -1,0 +1,35 @@
+{
+  "name": "lib-core",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "root": "libs/lib-core",
+  "sourceRoot": "libs/lib-core/src",
+  "projectType": "library",
+  "tags": ["type:lib"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p libs/lib-core/tsconfig.lib.json"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint \"libs/lib-core/src/**/*.{ts,html}\" --max-warnings=0"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng test lib-core --watch=false"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ngc -p libs/lib-core/tsconfig.lib.json"
+      },
+      "outputs": ["{workspaceRoot}/dist/libs/lib-core"]
+    }
+  }
+}

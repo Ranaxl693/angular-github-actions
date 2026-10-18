@@ -1,0 +1,60 @@
+{
+  "name": "mfe2",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "root": "apps/mfe2",
+  "sourceRoot": "apps/mfe2/src",
+  "projectType": "application",
+  "tags": ["type:app"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p apps/mfe2/tsconfig.app.json"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint \"apps/mfe2/src/**/*.{ts,html}\" --max-warnings=0"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng test mfe2 --watch=false"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng build mfe2",
+        "outputPath": "dist/apps/mfe2",
+        "forwardAllArgs": false
+      },
+      "defaultConfiguration": "production",
+      "outputs": ["{options.outputPath}"],
+      "configurations": {
+        "production": {
+          "command": "ng build mfe2 --configuration production",
+          "outputPath": "dist/apps/mfe2"
+        },
+        "development": {
+          "command": "ng build mfe2 --configuration development",
+          "outputPath": "dist/dev/mfe2"
+        },
+        "pages": {
+          "command": "ng build mfe2 --configuration pages",
+          "outputPath": "dist/apps/mfe2"
+        }
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng serve mfe2"
+      },
+      "continuous": true
+    }
+  },
+  "implicitDependencies": ["lib-core", "lib-ui"]
+}

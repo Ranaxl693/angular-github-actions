@@ -1,0 +1,22 @@
+<main>
+  <header>
+    <p class="eyebrow">Angular 22 · Nx monorepo · Native Federation</p>
+    <h1>Hello, {{ title() }}</h1>
+    <p data-testid="environment-name">Environment: {{ environmentName }}</p>
+    <nav aria-label="Micro frontends">
+      <a routerLink="/" [routerLinkActiveOptions]="{ exact: true }" routerLinkActive="active"
+        >Home</a
+      >
+      <a routerLink="/mfe1" routerLinkActive="active">MFE 1 · Products</a>
+      <a routerLink="/mfe2" routerLinkActive="active">MFE 2 · Selection</a>
+    </nav>
+  </header>
+  <app-ui-card title="Host application">
+    <p>Choose a remote above. Each micro frontend is built separately and loaded at runtime.</p>
+    <p>
+      Shared selection: <strong data-testid="host-count">{{ workspace.selectedCount() }}</strong>
+    </p>
+    <p>The host and both remotes use lib-core for state and lib-ui for reusable components.</p>
+  </app-ui-card>
+  <div class="remote"><router-outlet /></div>
+</main>

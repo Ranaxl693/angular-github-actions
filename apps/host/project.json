@@ -1,0 +1,60 @@
+{
+  "name": "host",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "root": "apps/host",
+  "sourceRoot": "apps/host/src",
+  "projectType": "application",
+  "tags": ["type:app"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p apps/host/tsconfig.app.json"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint \"apps/host/src/**/*.{ts,html}\" --max-warnings=0"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng test host --watch=false"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng build host",
+        "outputPath": "dist/angular-github-actions",
+        "forwardAllArgs": false
+      },
+      "defaultConfiguration": "production",
+      "outputs": ["{options.outputPath}"],
+      "configurations": {
+        "production": {
+          "command": "ng build host --configuration production",
+          "outputPath": "dist/angular-github-actions"
+        },
+        "development": {
+          "command": "ng build host --configuration development",
+          "outputPath": "dist/dev/host"
+        },
+        "pages": {
+          "command": "ng build host --configuration pages",
+          "outputPath": "dist/angular-github-actions"
+        }
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng serve host"
+      },
+      "continuous": true
+    }
+  },
+  "implicitDependencies": ["lib-core", "lib-ui"]
+}
