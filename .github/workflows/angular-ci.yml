@@ -1,284 +1,38 @@
 name: Angular CLI CI
-
 on:
   pull_request:
     branches: [develop]
     types: [opened, synchronize, reopened, ready_for_review]
-
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: GitHub Pages folder to update using the latest successful PR build
-        type: choice
-        required: true
-        default: CIT
-        options: [CIT, DEV, QA, PRODUCTION]
-
 permissions:
   contents: read
-
 concurrency:
   group: angular-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
-
 jobs:
-  type-check:
-    if: github.event_name == 'pull_request'
-    name: Type Check
+  test:
+    name: Type Check and Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type Check
-        run: npm run typecheck
-
-  lint:
-    if: github.event_name == 'pull_request'
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-  unit-tests:
-    if: github.event_name == 'pull_request'
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Unit Tests
-        run: npm run test:ci
-
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit -p tsconfig.app.json
+      - name: Unit tests
+        run: npm test -- --watch=false
   build:
-    if: github.event_name == 'pull_request'
     name: Angular Build
+    needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Angular Build
-        run: npm run build:pages
-
-      # Transport the parallel build output; only the gated job publishes a deployable artifact.
-      - name: Stage build output
-        uses: actions/upload-artifact@v4
-        with:
-          name: angular-build-staging
-          path: dist/angular-github-actions/browser
-          if-no-files-found: error
-          retention-days: 1
-
-  publish-artifact:
-    name: Publish Validated Artifact
-    if: github.event_name == 'pull_request'
-    needs: [type-check, lint, unit-tests, build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download staged build
-        uses: actions/download-artifact@v4
-        with:
-          name: angular-build-staging
-          path: validated-build
-
-      - name: Upload validated PR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: angular-pr-build
-          path: validated-build
-          if-no-files-found: error
-          retention-days: 30
-
-  deploy:
-    name: Deploy ${{ inputs.environment }} to GitHub Pages
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Retain the complete site on the gh-pages state branch.
-      actions: read # Download artifacts from a different workflow run.
-      pages: write
-      id-token: write
-    # All folders share one Pages site; never overlap or interrupt deployments.
-    concurrency:
-      group: github-pages
-      cancel-in-progress: false
-    # No required reviewers or approval gates are configured by this workflow.
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      SELECTED_ENVIRONMENT: ${{ inputs.environment }}
-    steps:
-      - name: Find latest successful PR artifact and saved site
-        id: source
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const repo = context.repo;
-            let source;
-            for await (const page of github.paginate.iterator(github.rest.actions.listWorkflowRuns, {
-              ...repo, workflow_id: 'angular-ci.yml', event: 'pull_request',
-              status: 'success', per_page: 100,
-            })) {
-              for (const run of page.data) {
-                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                  ...repo, run_id: run.id, per_page: 100,
-                });
-                const artifact = artifacts.find(a => a.name === 'angular-pr-build' && !a.expired);
-                if (artifact) { source = { run, artifact }; break; }
-              }
-              if (source) break;
-            }
-            if (!source) throw new Error('No retained artifact from a successful PR run. Run PR validation against develop first.');
-            core.setOutput('run-id', String(source.run.id));
-            core.setOutput('artifact-id', String(source.artifact.id));
-            core.info(`Using successful PR run ${source.run.id}, commit ${source.run.head_sha}`);
-            await core.summary.addHeading('GitHub Pages deployment')
-              .addTable([
-                [{data: 'Environment', header: true}, {data: 'PR run', header: true}, {data: 'Commit', header: true}],
-                [process.env.SELECTED_ENVIRONMENT, String(source.run.id), source.run.head_sha],
-              ]).write();
-            try {
-              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
-              core.setOutput('state-ref', 'gh-pages');
-              core.setOutput('has-state', 'true');
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              core.setOutput('state-ref', context.payload.repository.default_branch);
-              core.setOutput('has-state', 'false');
-            }
-
-      - name: Download validated PR artifact
-        uses: actions/download-artifact@v4
-        with:
-          artifact-ids: ${{ steps.source.outputs.artifact-id }}
-          run-id: ${{ steps.source.outputs.run-id }}
-          github-token: ${{ github.token }}
-          path: pr-build
-
-      - name: Checkout saved Pages site
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.source.outputs.state-ref }}
-          path: deployment-state
-
-      - name: Initialize site state on first deployment
-        if: steps.source.outputs.has-state == 'false'
-        working-directory: deployment-state
-        run: git switch --orphan gh-pages
-
-      - name: Update selected folder and preserve the other environments
-        env:
-          SITE_ROOT: ${{ github.workspace }}/deployment-state
-          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
-          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
-        run: |
-          python3 - <<'PYTHON'
-          import os
-          import shutil
-          from pathlib import Path
-
-          folders = {'CIT': 'cit', 'DEV': 'dev', 'QA': 'qa', 'PRODUCTION': 'production'}
-          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
-          site = Path(os.environ['SITE_ROOT'])
-          artifact = Path(os.environ['ARTIFACT_ROOT'])
-          publish = Path(os.environ['PUBLISH_ROOT'])
-          if any(path.is_symlink() for path in artifact.rglob('*')):
-              raise RuntimeError('Build artifact must not contain symbolic links')
-          if '<base href="./">' not in (artifact / 'index.html').read_text():
-              raise RuntimeError('PR artifact must be built with --base-href ./')
-          target = site / folder
-          if target.is_symlink():
-              target.unlink()
-          elif target.exists():
-              shutil.rmtree(target)
-          shutil.copytree(artifact, target)
-          publish.mkdir(parents=True, exist_ok=True)
-          for name in folders.values():
-              existing = site / name
-              if existing.is_symlink():
-                  raise RuntimeError('Saved environment folders must not be symbolic links')
-              if existing.is_dir():
-                  if any(path.is_symlink() for path in existing.rglob('*')):
-                      raise RuntimeError('Saved site must not contain symbolic links')
-                  shutil.copytree(existing, publish / name)
-          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Deploying validated PR artifact to /{folder}/')
-          PYTHON
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload complete Pages site
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ${{ runner.temp }}/pages-site
-
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Save deployed folders for the next manual run
-        working-directory: deployment-state
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for folder in cit dev qa production; do
-            if [[ -d "$folder" ]]; then
-              git add -- "$folder"
-            fi
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
-            git push origin HEAD:gh-pages
-          fi
-
-      - name: Report deployed URL
-        env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          folder="${SELECTED_ENVIRONMENT,,}"
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
+      - run: npm ci
+      - name: Build
+        run: npm run build
