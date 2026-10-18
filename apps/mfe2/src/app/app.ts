@@ -10,4 +10,5 @@ import { Card } from '@workspace/lib-ui';
 })
 export class App {
   protected readonly workspace = inject(WorkspaceState);
+  title: string = 'MFE2';
 }
