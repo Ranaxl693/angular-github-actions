@@ -5,8 +5,12 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 permissions:
   contents: read
+concurrency:
+  group: angular-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  validate:
+  test:
+    name: Type Check and Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +23,16 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.app.json
       - name: Unit tests
         run: npm test -- --watch=false
+  build:
+    name: CIT Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Build CIT
+        run: npm run build -- --configuration cit
