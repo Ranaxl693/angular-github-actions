@@ -12,6 +12,7 @@ Use Node.js 24.18.0 (pinned in `.nvmrc`). With nvm, run `nvm install` and `nvm u
 To start a local development server, run:
 
 ```bash
+npm i
 npm start
 ```
 
