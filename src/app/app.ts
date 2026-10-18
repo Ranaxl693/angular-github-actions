@@ -10,5 +10,5 @@ import { environment } from '../environments/environment';
 })
 export class App {
   protected readonly environmentName = environment.environmentName;
-  protected readonly title = signal('angular-github-actions-- Yo !!!');
+  protected readonly title = signal('angular-github-actions');
 }
