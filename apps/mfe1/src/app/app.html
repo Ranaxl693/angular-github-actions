@@ -1,5 +1,6 @@
 <app-ui-card title="MFE 1 · Products">
   <p>This product list is loaded from the mfe1 remote. Cache invalidation POC: MFE1 updated.</p>
+  <p>Incremental cache test: MFE 1 changed alongside MFE 2.</p>
   <ul>
     @for (product of products; track product) {
       <li>{{ product }} <button type="button" (click)="workspace.addItem()">Add item</button></li>
