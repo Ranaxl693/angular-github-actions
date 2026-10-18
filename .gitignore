@@ -1,10 +1,13 @@
 # See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # Compiled output
-/dist
+/dist/
 /tmp
 /out-tsc
 /bazel-out
+/coverage/
+/cache/
+/.cache/
 
 # Node
 /node_modules
@@ -30,10 +33,9 @@ yarn-error.log
 .history/*
 
 # Miscellaneous
-/.angular/cache
+/.angular/cache/
 .sass-cache/
 /connect.lock
-/coverage
 /libpeerconnection.log
 testem.log
 /typings
@@ -42,3 +44,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Nx task cache and workspace metadata
+/.nx/
