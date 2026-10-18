@@ -92,6 +92,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
+      pull-requests: read
     env:
       NX_CLOUD: 'false'
       NX_DAEMON: 'false'
@@ -107,13 +109,90 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Angular Build (Nx affected)
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx nx affected -t build --base=origin/develop --head=HEAD --outputStyle=static
-      - name: Stage complete site build for PR publishing
-        run: npm run build:pages
+      - name: Find latest successful application artifact for this PR
+        id: previous
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pullNumber = context.payload.pull_request.number;
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner,
+              repo,
+              workflow_id: 'nx-multi-runner-ci.yml',
+              event: 'pull_request',
+              per_page: 100,
+            });
+            const candidates = runs
+              .filter((run) =>
+                run.id !== context.runId &&
+                run.pull_requests?.some((pull) => pull.number === pullNumber)
+              )
+              .sort((a, b) => b.run_number - a.run_number);
+            for (const run of candidates) {
+              if (!/^[0-9a-f]{40}$/i.test(run.head_sha || '')) {
+                continue;
+              }
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                owner,
+                repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+              const successfulJobs = new Set(
+                jobs
+                  .filter((job) => job.status === 'completed' && job.conclusion === 'success')
+                  .map((job) => job.name)
+              );
+              if (
+                !successfulJobs.has('Angular Build') ||
+                !successfulJobs.has('Publish Validated Artifact')
+              ) {
+                continue;
+              }
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                owner,
+                repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+              const artifact = artifacts.find(
+                (item) => item.name === 'nx-pages-app-builds' && !item.expired,
+              );
+              if (artifact) {
+                core.setOutput('run-id', String(run.id));
+                core.setOutput('head-sha', run.head_sha);
+                core.info(
+                  `Using validated app outputs from PR run ${run.run_number}; build and publish jobs succeeded.`
+                );
+                return;
+              }
+            }
+            core.setOutput('run-id', '');
+            core.setOutput('head-sha', '');
+            core.info('No reusable successful PR build artifact found; missing app outputs will be built.');
+      - name: Download previous validated application outputs
+        if: steps.previous.outputs.run-id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: nx-pages-app-builds
+          run-id: ${{ steps.previous.outputs.run-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          path: previous-app-builds
+      - name: Build affected Pages applications and package complete site
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREVIOUS_APP_BUILDS_HEAD_SHA: ${{ steps.previous.outputs.head-sha }}
+        run: node tools/build-affected-pages.mjs
+      - name: Upload validated application outputs for future runs
+        uses: actions/upload-artifact@v4
+        with:
+          name: nx-pages-app-builds
+          path: dist/nx-pages-app-builds
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload staged build
         uses: actions/upload-artifact@v4
         with:
@@ -525,7 +604,6 @@ jobs:
           folder="${SELECTED_ENVIRONMENT,,}"
           echo "Deployed URL: ${PAGE_URL%/}/$folder/"
           echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
-
 
   deploy-prod:
     name: Deploy PROD to GitHub Pages
