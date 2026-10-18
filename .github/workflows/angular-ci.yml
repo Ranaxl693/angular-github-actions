@@ -234,6 +234,30 @@ jobs:
             nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
             nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
 
+      - name: Compare PR-wide and isolated MFE1 affected projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "### Nx affected project comparison" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Full PR against develop** (the actual CI validation scope):" >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~~text' >> "$GITHUB_STEP_SUMMARY"
+          npx nx show projects --affected --base=origin/develop --head=HEAD --outputStyle=static | tee nx-pr-affected.txt
+          cat nx-pr-affected.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~~' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          MFE_COMMIT=$(git log -1 --format=%H -- apps/mfe1/src/app/app.ts)
+          MFE_BASE=$(git rev-parse "${MFE_COMMIT}^")
+          echo "**Isolated MFE1 app.ts commit** (${MFE_COMMIT:0:8} vs parent ${MFE_BASE:0:8}):" >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~~text' >> "$GITHUB_STEP_SUMMARY"
+          git diff --name-only "$MFE_BASE" "$MFE_COMMIT" | tee nx-mfe1-changed-files.txt
+          echo "Changed files:" >> "$GITHUB_STEP_SUMMARY"
+          cat nx-mfe1-changed-files.txt >> "$GITHUB_STEP_SUMMARY"
+          echo "Affected projects:" >> "$GITHUB_STEP_SUMMARY"
+          npx nx show projects --affected --base="$MFE_BASE" --head="$MFE_COMMIT" --outputStyle=static | tee nx-mfe1-affected.txt
+          cat nx-mfe1-affected.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '~~~~' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Validate affected build targets
         id: nx-run
         shell: bash
