@@ -158,3 +158,10 @@ runs the federation browser tests before uploading the artifact.
 The Pages artifact path remains `dist/angular-github-actions/browser`, so existing
 folder deployment steps copy the host **and both remotes** together. No additional
 workflow, deployment provider, or approval rule is introduced by this migration.
+
+The `.github/workflows/nx-multi-runner-ci.yml` build uses the `pages`
+configuration once. It reuses application outputs only from a successful prior
+run of the same PR, rebuilding apps Nx reports affected since that artifact and
+restoring unchanged outputs. Missing or incompatible artifacts cause the missing
+apps (or all apps when no reusable artifact exists) to be built, so the published
+Pages artifact always contains the host and both remotes.
