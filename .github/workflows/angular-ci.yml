@@ -149,7 +149,7 @@ jobs:
       cancel-in-progress: false
     # No required reviewers or approval gates are configured by this workflow.
     environment:
-      name: github-pages
+      name: ${{ inputs.environment }}
       url: ${{ steps.deployment.outputs.page_url }}
     env:
       SELECTED_ENVIRONMENT: ${{ inputs.environment }}
