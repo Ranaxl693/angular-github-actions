@@ -1,4 +1,4 @@
-name: Angular CLI CI
+name: Nx Angular CI
 
 on:
   pull_request:
@@ -13,9 +13,14 @@ jobs:
     if: github.event_name == 'pull_request'
     name: Type Check
     runs-on: ubuntu-latest
+    env:
+      NX_CLOUD: 'false'
+      NX_DAEMON: 'false'
     steps:
-      - name: Checkout
+      - name: Checkout full history for Nx affected
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node and npm cache
         uses: actions/setup-node@v4
@@ -26,17 +31,55 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type Check
-        run: npm run typecheck
+      - name: Restore Nx local task cache
+        id: nx-cache
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-type-check
+          restore-keys: |
+            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
+            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
+
+      - name: Validate affected typecheck targets
+        id: nx-run
+        shell: bash
+        run: |
+          set -o pipefail
+          start=$(date +%s)
+          npx nx affected -t typecheck --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-type-check.log
+          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+
+      - name: Nx cache and execution summary
+        if: always()
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.nx-cache.outputs.cache-hit }}
+          DURATION: ${{ steps.nx-run.outputs.duration }}
+        run: |
+          {
+            echo "### Nx Type Check"
+            echo "- GitHub cache exact-key hit: ${CACHE_HIT:-false} (a restored prefix cache may still be used)"
+            echo "- Nx affected execution: ${DURATION:-not completed} seconds"
+            if [[ -f nx-type-check.log ]]; then
+              echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-type-check.log || true)"
+            fi
+            echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   lint:
     needs: type-check
     if: github.event_name == 'pull_request'
     name: Lint
     runs-on: ubuntu-latest
+    env:
+      NX_CLOUD: 'false'
+      NX_DAEMON: 'false'
     steps:
-      - name: Checkout
+      - name: Checkout full history for Nx affected
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node and npm cache
         uses: actions/setup-node@v4
@@ -47,17 +90,55 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Restore Nx local task cache
+        id: nx-cache
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-lint
+          restore-keys: |
+            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
+            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
+
+      - name: Validate affected lint targets
+        id: nx-run
+        shell: bash
+        run: |
+          set -o pipefail
+          start=$(date +%s)
+          npx nx affected -t lint --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-lint.log
+          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+
+      - name: Nx cache and execution summary
+        if: always()
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.nx-cache.outputs.cache-hit }}
+          DURATION: ${{ steps.nx-run.outputs.duration }}
+        run: |
+          {
+            echo "### Nx Lint"
+            echo "- GitHub cache exact-key hit: ${CACHE_HIT:-false} (a restored prefix cache may still be used)"
+            echo "- Nx affected execution: ${DURATION:-not completed} seconds"
+            if [[ -f nx-lint.log ]]; then
+              echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-lint.log || true)"
+            fi
+            echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   unit-tests:
     needs: lint
     if: github.event_name == 'pull_request'
     name: Unit Tests
     runs-on: ubuntu-latest
+    env:
+      NX_CLOUD: 'false'
+      NX_DAEMON: 'false'
     steps:
-      - name: Checkout
+      - name: Checkout full history for Nx affected
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node and npm cache
         uses: actions/setup-node@v4
@@ -68,17 +149,55 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Unit Tests
-        run: npm run test:ci
+      - name: Restore Nx local task cache
+        id: nx-cache
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-unit-tests
+          restore-keys: |
+            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
+            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
+
+      - name: Validate affected test targets
+        id: nx-run
+        shell: bash
+        run: |
+          set -o pipefail
+          start=$(date +%s)
+          npx nx affected -t test --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-unit-tests.log
+          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+
+      - name: Nx cache and execution summary
+        if: always()
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.nx-cache.outputs.cache-hit }}
+          DURATION: ${{ steps.nx-run.outputs.duration }}
+        run: |
+          {
+            echo "### Nx Unit Tests"
+            echo "- GitHub cache exact-key hit: ${CACHE_HIT:-false} (a restored prefix cache may still be used)"
+            echo "- Nx affected execution: ${DURATION:-not completed} seconds"
+            if [[ -f nx-unit-tests.log ]]; then
+              echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-unit-tests.log || true)"
+            fi
+            echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build:
     needs: unit-tests
     if: github.event_name == 'pull_request'
     name: Angular Build
     runs-on: ubuntu-latest
+    env:
+      NX_CLOUD: 'false'
+      NX_DAEMON: 'false'
     steps:
-      - name: Checkout
+      - name: Checkout full history for Nx affected
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node and npm cache
         uses: actions/setup-node@v4
@@ -89,7 +208,44 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Angular Build
+      - name: Restore Nx local task cache
+        id: nx-cache
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-build
+          restore-keys: |
+            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
+            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
+
+      - name: Validate affected build targets
+        id: nx-run
+        shell: bash
+        run: |
+          set -o pipefail
+          start=$(date +%s)
+          npx nx affected -t build --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-build.log
+          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+
+      - name: Nx cache and execution summary
+        if: always()
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.nx-cache.outputs.cache-hit }}
+          DURATION: ${{ steps.nx-run.outputs.duration }}
+        run: |
+          {
+            echo "### Nx Angular Build"
+            echo "- GitHub cache exact-key hit: ${CACHE_HIT:-false} (a restored prefix cache may still be used)"
+            echo "- Nx affected execution: ${DURATION:-not completed} seconds"
+            if [[ -f nx-build.log ]]; then
+              echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-build.log || true)"
+            fi
+            echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Deployment needs all three apps, even when only a subset was affected.
+      - name: Package complete Pages build
         run: npm run build:pages
 
       - name: Install browser for federation checks
@@ -98,7 +254,6 @@ jobs:
       - name: Verify federated application in a browser
         run: npm run e2e
 
-      # Package the host and both remotes only after browser checks pass.
       - name: Stage build output
         uses: actions/upload-artifact@v4
         with:
