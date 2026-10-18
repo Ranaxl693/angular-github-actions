@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: angular-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   type-check:
@@ -137,7 +137,7 @@ jobs:
       id-token: write
     # All folders share one Pages site; never overlap or interrupt deployments.
     concurrency:
-      group: github-pages
+      group: github-pages-cit
       cancel-in-progress: false
     # Required reviewers for CIT are configured in GitHub Settings > Environments.
     environment:
@@ -265,7 +265,7 @@ jobs:
       id-token: write
     # All folders share one Pages site; never overlap or interrupt deployments.
     concurrency:
-      group: github-pages
+      group: github-pages-dev
       cancel-in-progress: false
     # Required reviewers for DEV are configured in GitHub Settings > Environments.
     environment:
@@ -393,7 +393,7 @@ jobs:
       id-token: write
     # All folders share one Pages site; never overlap or interrupt deployments.
     concurrency:
-      group: github-pages
+      group: github-pages-sit
       cancel-in-progress: false
     # Required reviewers for SIT are configured in GitHub Settings > Environments.
     environment:
@@ -522,7 +522,7 @@ jobs:
       id-token: write
     # All folders share one Pages site; never overlap or interrupt deployments.
     concurrency:
-      group: github-pages
+      group: github-pages-prod
       cancel-in-progress: false
     # IMPORTANT: Enable Required reviewers for PROD in GitHub Settings > Environments before using this job.
     environment:
