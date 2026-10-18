@@ -144,9 +144,7 @@ npm run build -- --configuration=production
 Start one environment at a time, then open `http://localhost:4200`:
 
 ```bash
-npm start -- --configuration=cit
-npm start -- --configuration=dev
-npm start -- --configuration=production
+npm start 
 ```
 
 Stop the current server with Ctrl+C before starting another. The page will show
