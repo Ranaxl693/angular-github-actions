@@ -133,7 +133,7 @@ jobs:
       id-token: write
     # All folders share one Pages site; never overlap or interrupt deployments.
     concurrency:
-      group: github-pages-cit
+      group: github-pages-cit-${{ github.run_id }}
       cancel-in-progress: false
     # Required reviewers for CIT are configured in GitHub Settings > Environments.
     environment:
@@ -261,7 +261,7 @@ jobs:
       id-token: write
     # All folders share one Pages site; never overlap or interrupt deployments.
     concurrency:
-      group: github-pages-dev
+      group: github-pages-dev-${{ github.run_id }}
       cancel-in-progress: false
     # Required reviewers for DEV are configured in GitHub Settings > Environments.
     environment:
@@ -389,7 +389,7 @@ jobs:
       id-token: write
     # All folders share one Pages site; never overlap or interrupt deployments.
     concurrency:
-      group: github-pages-sit
+      group: github-pages-sit-${{ github.run_id }}
       cancel-in-progress: false
     # Required reviewers for SIT are configured in GitHub Settings > Environments.
     environment:
@@ -518,7 +518,7 @@ jobs:
       id-token: write
     # All folders share one Pages site; never overlap or interrupt deployments.
     concurrency:
-      group: github-pages-prod
+      group: github-pages-prod-${{ github.run_id }}
       cancel-in-progress: false
     # IMPORTANT: Enable Required reviewers for PROD in GitHub Settings > Environments before using this job.
     environment:
