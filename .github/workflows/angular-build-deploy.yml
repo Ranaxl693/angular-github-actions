@@ -1,0 +1,76 @@
+name: Angular Build and Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Select deployment environment
+        required: true
+        type: choice
+        options:
+          - CIT
+          - DEV
+          - PRODUCTION
+permissions:
+  contents: write
+concurrency:
+  group: angular-pages-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit -p tsconfig.app.json
+      - name: Unit tests
+        run: npm test -- --watch=false
+      - name: Select target
+        shell: bash
+        env:
+          TARGET: ${{ inputs.environment }}
+        run: |
+          case "$TARGET" in
+            CIT) echo "CONFIG=cit" >> "$GITHUB_ENV"; echo "TARGET_PATH=cit" >> "$GITHUB_ENV" ;;
+            DEV) echo "CONFIG=dev" >> "$GITHUB_ENV"; echo "TARGET_PATH=dev" >> "$GITHUB_ENV" ;;
+            PRODUCTION) echo "CONFIG=production" >> "$GITHUB_ENV"; echo "TARGET_PATH=production" >> "$GITHUB_ENV" ;;
+            *) exit 1 ;;
+          esac
+          echo "Selected deployment environment: $TARGET" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build Angular
+        run: npm run build -- --configuration "$CONFIG" --base-href "/angular-github-actions/$TARGET_PATH/"
+      - name: Locate browser output
+        shell: bash
+        run: |
+          if [ -f dist/angular-github-actions/browser/index.html ]; then
+            echo "BUILD_DIR=dist/angular-github-actions/browser" >> "$GITHUB_ENV"
+          elif [ -f dist/angular-github-actions/index.html ]; then
+            echo "BUILD_DIR=dist/angular-github-actions" >> "$GITHUB_ENV"
+          else
+            echo "Angular build output not found" >&2; exit 1
+          fi
+      - name: Publish environment directory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pages-site
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git clone --quiet --branch gh-pages --single-branch "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" /tmp/pages-site
+          else
+            git -C /tmp/pages-site init -b gh-pages
+            git -C /tmp/pages-site remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+          touch /tmp/pages-site/.nojekyll
+          rm -rf "/tmp/pages-site/$TARGET_PATH"
+          mkdir -p "/tmp/pages-site/$TARGET_PATH"
+          cp -a "$BUILD_DIR/." "/tmp/pages-site/$TARGET_PATH/"
+          git -C /tmp/pages-site add -A
+          git -C /tmp/pages-site -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -m "Deploy $TARGET_PATH from $GITHUB_SHA" || exit 0
+          git -C /tmp/pages-site push origin gh-pages
+          echo "URL: https://${GITHUB_REPOSITORY_OWNER,,}.github.io/angular-github-actions/$TARGET_PATH/" >> "$GITHUB_STEP_SUMMARY"
