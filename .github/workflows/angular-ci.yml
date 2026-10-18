@@ -268,12 +268,9 @@ jobs:
           echo "- Restored cache files: $(find "$NX_CACHE_DIRECTORY" -type f 2>/dev/null | wc -l)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Restored cache size: $(du -sh "$NX_CACHE_DIRECTORY" 2>/dev/null | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Cache files at default path: $(find .nx/cache -type f 2>/dev/null | wc -l)" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Nx task hashes (diagnostic)" >> "$GITHUB_STEP_SUMMARY"
-          echo '~~~~text' >> "$GITHUB_STEP_SUMMARY"
-          # Nx dry-run emits the planned task graph and hashes without executing tasks.
-          npx nx affected -t build --base=origin/develop --head=HEAD --dry-run --outputStyle=static 2>&1 | tee nx-build-dry-run.log
-          tail -n 70 nx-build-dry-run.log >> "$GITHUB_STEP_SUMMARY"
-          echo '~~~~' >> "$GITHUB_STEP_SUMMARY"
+          echo "### Nx restored-cache trust warning check" >> "$GITHUB_STEP_SUMMARY"
+          echo "Nx local cache restored from GitHub Actions may be rejected as unrecognized on a different runner." >> "$GITHUB_STEP_SUMMARY"
+          echo "Task hashes are not collected by this diagnostic; no build commands are run here." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate affected build targets
         id: nx-run
