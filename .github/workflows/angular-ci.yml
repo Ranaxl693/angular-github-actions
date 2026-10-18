@@ -147,7 +147,8 @@ jobs:
     concurrency:
       group: github-pages
       cancel-in-progress: false
-    # No required reviewers or approval gates are configured by this workflow.
+    # GitHub Environment protection rules control approval: CIT requires review; DEV does not.
+    # The selected environment is resolved dynamically for manual deployments.
     environment:
       name: ${{ inputs.environment }}
       url: ${{ steps.deployment.outputs.page_url }}
