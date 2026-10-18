@@ -4,6 +4,13 @@ on:
   pull_request:
     branches: [develop]
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options: [CIT, DEV, SIT, PROD]
 
 permissions:
   contents: read
@@ -46,9 +53,9 @@ jobs:
             echo '| Unit Tests | `npx nx affected -t test --base=origin/develop --head=HEAD --outputStyle=static` | Test affected projects |'
             echo '| Affected scope | `npx nx show projects --affected --base=origin/develop --head=HEAD --json` | Report affected projects |'
             echo '| Affected Build | `npx nx affected -t build --base=origin/develop --head=HEAD --outputStyle=static` | Build affected projects |'
-            echo '| Complete Pages package | `npm run build:pages` | Build all deployable apps and package them |'
-            echo '| Browser installation | `npm exec -- playwright install --with-deps chromium` | Install E2E browser |'
-            echo '| Browser E2E | `npm run e2e` | Test complete federated app |'
+            echo '| Complete Pages package | Manual deployment only | Build all apps outside PR validation |'
+            echo '| Browser installation | Manual deployment only | Install E2E browser |'
+            echo '| Browser E2E | Manual deployment only | Test complete federated app |'
             echo ''
             echo '> This table reflects the configured CI commands. Nx determines the projects and dependent tasks actually executed.'
           } | tee -a "$GITHUB_STEP_SUMMARY"
@@ -90,7 +97,7 @@ jobs:
               out.write(f"- Unaffected projects: **{len(skipped)}** — {', '.join(skipped) or 'none'}\n")
               out.write(f"- Projects excluded from affected selection: **{len(skipped)}/{len(all_projects)}**\n")
               out.write("- These counts show affected selection, **not** cache hits or total builds skipped.\n")
-              out.write("- The complete Pages packaging build remains enabled for deployable artifacts.\n")
+              out.write("- Full Pages packaging runs only in the manual deployment workflow.\n")
           PY
 
       - name: Validate affected build targets
@@ -118,7 +125,26 @@ jobs:
             echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Deployment needs all three apps, even when only a subset was affected.
+  package-for-deployment:
+    name: Build and E2E Test Complete Pages Site
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      NX_CLOUD: 'false'
+      NX_DAEMON: 'false'
+    steps:
+      - name: Checkout deployment revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node and npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Package complete Pages build
         run: npm run build:pages
 
@@ -128,38 +154,18 @@ jobs:
       - name: Verify federated application in a browser
         run: npm run e2e
 
-      - name: Stage build output
-        uses: actions/upload-artifact@v4
-        with:
-          name: angular-build-staging
-          path: dist/angular-github-actions/browser
-          if-no-files-found: error
-          retention-days: 1
-
-  publish-artifact:
-    name: Publish Validated Artifact
-    if: github.event_name == 'pull_request'
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download staged build
-        uses: actions/download-artifact@v4
-        with:
-          name: angular-build-staging
-          path: validated-build
-
-      - name: Upload validated PR artifact
+      - name: Upload validated Pages artifact
         uses: actions/upload-artifact@v4
         with:
           name: angular-pr-build
-          path: validated-build
+          path: dist/angular-github-actions/browser
           if-no-files-found: error
           retention-days: 30
 
   deploy-cit:
     name: Deploy CIT to GitHub Pages
-    needs: publish-artifact
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: package-for-deployment
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'CIT'
     runs-on: ubuntu-latest
     permissions:
       contents: write # Retain the complete site on the gh-pages state branch.
@@ -193,7 +199,7 @@ jobs:
               core.setOutput('has-state', 'false');
             }
 
-      - name: Download validated artifact from this PR run
+      - name: Download validated artifact from this deployment run
         uses: actions/download-artifact@v4
         with:
           name: angular-pr-build
@@ -229,7 +235,7 @@ jobs:
           if any(path.is_symlink() for path in artifact.rglob('*')):
               raise RuntimeError('Build artifact must not contain symbolic links')
           if '<base href="./">' not in (artifact / 'index.html').read_text():
-              raise RuntimeError('PR artifact must be built with --base-href ./')
+              raise RuntimeError('Pages artifact must be built with --base-href ./')
           target = site / folder
           if target.is_symlink():
               target.unlink()
@@ -246,7 +252,7 @@ jobs:
                       raise RuntimeError('Saved site must not contain symbolic links')
                   shutil.copytree(existing, publish / name)
           print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Deploying validated PR artifact to /{folder}/')
+          print(f'Deploying validated artifact to /{folder}/')
           PYTHON
 
       - name: Configure GitHub Pages
@@ -286,8 +292,8 @@ jobs:
 
   deploy-dev:
     name: Deploy DEV to GitHub Pages
-    needs: publish-artifact
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: package-for-deployment
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'DEV'
     runs-on: ubuntu-latest
     permissions:
       contents: write # Retain the complete site on the gh-pages state branch.
@@ -321,7 +327,7 @@ jobs:
               core.setOutput('has-state', 'false');
             }
 
-      - name: Download validated artifact from this PR run
+      - name: Download validated artifact from this deployment run
         uses: actions/download-artifact@v4
         with:
           name: angular-pr-build
@@ -357,7 +363,7 @@ jobs:
           if any(path.is_symlink() for path in artifact.rglob('*')):
               raise RuntimeError('Build artifact must not contain symbolic links')
           if '<base href="./">' not in (artifact / 'index.html').read_text():
-              raise RuntimeError('PR artifact must be built with --base-href ./')
+              raise RuntimeError('Pages artifact must be built with --base-href ./')
           target = site / folder
           if target.is_symlink():
               target.unlink()
@@ -374,7 +380,7 @@ jobs:
                       raise RuntimeError('Saved site must not contain symbolic links')
                   shutil.copytree(existing, publish / name)
           print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Deploying validated PR artifact to /{folder}/')
+          print(f'Deploying validated artifact to /{folder}/')
           PYTHON
 
       - name: Configure GitHub Pages
@@ -414,8 +420,8 @@ jobs:
 
   deploy-sit:
     name: Deploy SIT to GitHub Pages
-    needs: publish-artifact
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: package-for-deployment
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'SIT'
     runs-on: ubuntu-latest
     permissions:
       contents: write # Retain the complete site on the gh-pages state branch.
@@ -449,7 +455,7 @@ jobs:
               core.setOutput('has-state', 'false');
             }
 
-      - name: Download validated artifact from this PR run
+      - name: Download validated artifact from this deployment run
         uses: actions/download-artifact@v4
         with:
           name: angular-pr-build
@@ -485,7 +491,7 @@ jobs:
           if any(path.is_symlink() for path in artifact.rglob('*')):
               raise RuntimeError('Build artifact must not contain symbolic links')
           if '<base href="./">' not in (artifact / 'index.html').read_text():
-              raise RuntimeError('PR artifact must be built with --base-href ./')
+              raise RuntimeError('Pages artifact must be built with --base-href ./')
           target = site / folder
           if target.is_symlink():
               target.unlink()
@@ -502,7 +508,7 @@ jobs:
                       raise RuntimeError('Saved site must not contain symbolic links')
                   shutil.copytree(existing, publish / name)
           print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Deploying validated PR artifact to /{folder}/')
+          print(f'Deploying validated artifact to /{folder}/')
           PYTHON
 
       - name: Configure GitHub Pages
@@ -542,8 +548,8 @@ jobs:
 
   deploy-prod:
     name: Deploy PROD to GitHub Pages
-    needs: publish-artifact
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: package-for-deployment
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'PROD'
     runs-on: ubuntu-latest
     permissions:
       contents: write # Retain the complete site on the gh-pages state branch.
@@ -577,7 +583,7 @@ jobs:
               core.setOutput('has-state', 'false');
             }
 
-      - name: Download validated artifact from this PR run
+      - name: Download validated artifact from this deployment run
         uses: actions/download-artifact@v4
         with:
           name: angular-pr-build
@@ -613,7 +619,7 @@ jobs:
           if any(path.is_symlink() for path in artifact.rglob('*')):
               raise RuntimeError('Build artifact must not contain symbolic links')
           if '<base href="./">' not in (artifact / 'index.html').read_text():
-              raise RuntimeError('PR artifact must be built with --base-href ./')
+              raise RuntimeError('Pages artifact must be built with --base-href ./')
           target = site / folder
           if target.is_symlink():
               target.unlink()
@@ -630,7 +636,7 @@ jobs:
                       raise RuntimeError('Saved site must not contain symbolic links')
                   shutil.copytree(existing, publish / name)
           print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Deploying validated PR artifact to /{folder}/')
+          print(f'Deploying validated artifact to /{folder}/')
           PYTHON
 
       - name: Configure GitHub Pages
