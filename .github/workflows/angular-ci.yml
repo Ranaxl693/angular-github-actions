@@ -84,14 +84,14 @@ jobs:
           skipped = sorted(all_projects - affected)
           summary = os.environ["GITHUB_STEP_SUMMARY"]
           with open(summary, "a") as out:
-              out.write("### Nx affected scope (actual PR vs develop)\\n")
-              out.write(f"- Workspace projects: **{len(all_projects)}**\\n")
-              out.write(f"- Affected projects: **{len(affected)}** — {', '.join(sorted(affected)) or 'none'}\\n")
-              out.write(f"- Unaffected projects: **{len(skipped)}** — {', '.join(skipped) or 'none'}\\n")
-              out.write(f"- Projects excluded from affected selection: **{len(skipped)}/{len(all_projects)}**\\n")
-              out.write("- These counts show affected selection, **not** cache hits or total builds skipped.\\n")
-              out.write("- The complete Pages packaging build remains enabled for deployable artifacts.\\n")
-          PYTHON
+              out.write("### Nx affected scope (actual PR vs develop)\n")
+              out.write(f"- Workspace projects: **{len(all_projects)}**\n")
+              out.write(f"- Affected projects: **{len(affected)}** — {', '.join(sorted(affected)) or 'none'}\n")
+              out.write(f"- Unaffected projects: **{len(skipped)}** — {', '.join(skipped) or 'none'}\n")
+              out.write(f"- Projects excluded from affected selection: **{len(skipped)}/{len(all_projects)}**\n")
+              out.write("- These counts show affected selection, **not** cache hits or total builds skipped.\n")
+              out.write("- The complete Pages packaging build remains enabled for deployable artifacts.\n")
+          PY
 
       - name: Validate affected build targets
         id: nx-run
