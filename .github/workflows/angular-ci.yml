@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  type-check:
+  build:
     if: github.event_name == 'pull_request'
-    name: Type Check
+    name: Validate and Build (single runner)
     runs-on: ubuntu-latest
     env:
       NX_CLOUD: 'false'
@@ -32,152 +32,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate affected typecheck targets
-        id: nx-run
+      - name: Validate affected type check targets
         shell: bash
         run: |
-          set -o pipefail
-          start=$(date +%s)
-          npx nx affected -t typecheck --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-type-check.log
-          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
-
-      - name: Nx cache and execution summary
-        if: always()
-        shell: bash
-        env:
-          DURATION: ${{ steps.nx-run.outputs.duration }}
-        run: |
-          {
-            echo "### Nx Type Check"
-            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
-            echo "- Nx affected execution: ${DURATION:-not completed} seconds"
-            if [[ -f nx-type-check.log ]]; then
-              echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-type-check.log || true)"
-            fi
-            echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  lint:
-    needs: type-check
-    if: github.event_name == 'pull_request'
-    name: Lint
-    runs-on: ubuntu-latest
-    env:
-      NX_CLOUD: 'false'
-      NX_DAEMON: 'false'
-      NX_CACHE_DIRECTORY: ${{ github.workspace }}/.nx/cache
-    steps:
-      - name: Checkout full history for Nx affected
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+          set -euo pipefail
+          npx nx affected -t typecheck --base=origin/develop --head=HEAD --outputStyle=static
 
       - name: Validate affected lint targets
-        id: nx-run
         shell: bash
         run: |
-          set -o pipefail
-          start=$(date +%s)
-          npx nx affected -t lint --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-lint.log
-          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          npx nx affected -t lint --base=origin/develop --head=HEAD --outputStyle=static
 
-      - name: Nx cache and execution summary
-        if: always()
-        shell: bash
-        env:
-          DURATION: ${{ steps.nx-run.outputs.duration }}
-        run: |
-          {
-            echo "### Nx Lint"
-            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
-            echo "- Nx affected execution: ${DURATION:-not completed} seconds"
-            if [[ -f nx-lint.log ]]; then
-              echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-lint.log || true)"
-            fi
-            echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  unit-tests:
-    needs: lint
-    if: github.event_name == 'pull_request'
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    env:
-      NX_CLOUD: 'false'
-      NX_DAEMON: 'false'
-      NX_CACHE_DIRECTORY: ${{ github.workspace }}/.nx/cache
-    steps:
-      - name: Checkout full history for Nx affected
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Validate affected test targets
-        id: nx-run
+      - name: Validate affected unit tests targets
         shell: bash
         run: |
-          set -o pipefail
-          start=$(date +%s)
-          npx nx affected -t test --base=origin/develop --head=HEAD --outputStyle=static 2>&1 | tee nx-unit-tests.log
-          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
-
-      - name: Nx cache and execution summary
-        if: always()
-        shell: bash
-        env:
-          DURATION: ${{ steps.nx-run.outputs.duration }}
-        run: |
-          {
-            echo "### Nx Unit Tests"
-            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
-            echo "- Nx affected execution: ${DURATION:-not completed} seconds"
-            if [[ -f nx-unit-tests.log ]]; then
-              echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-unit-tests.log || true)"
-            fi
-            echo "- Nx cache directory: $(du -sh .nx/cache 2>/dev/null | cut -f1 || echo 'not created')"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  build:
-    needs: unit-tests
-    if: github.event_name == 'pull_request'
-    name: Angular Build
-    runs-on: ubuntu-latest
-    env:
-      NX_CLOUD: 'false'
-      NX_DAEMON: 'false'
-      NX_CACHE_DIRECTORY: ${{ github.workspace }}/.nx/cache
-    steps:
-      - name: Checkout full history for Nx affected
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+          set -euo pipefail
+          npx nx affected -t test --base=origin/develop --head=HEAD --outputStyle=static
 
       - name: Compare PR-wide and isolated MFE1 affected projects
         shell: bash
