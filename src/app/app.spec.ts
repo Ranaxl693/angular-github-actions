@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { App } from './app';
+import { environment } from '../environments/environment';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -13,6 +14,14 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
+  });
+
+  it('should display the configured environment', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('[data-testid="environment-name"]')?.textContent?.trim())
+      .toBe(`Environment: ${environment.environmentName}`);
   });
 
   it('should render title', async () => {
