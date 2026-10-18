@@ -32,19 +32,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Initialize Nx cache directory
-        run: mkdir -p .nx/cache
-
-      - name: Restore Nx local task cache
-        id: nx-cache
-        uses: actions/cache@v4
-        with:
-          path: .nx/cache
-          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-type-check
-          restore-keys: |
-            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
-            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
-
       - name: Validate affected typecheck targets
         id: nx-run
         shell: bash
@@ -58,12 +45,11 @@ jobs:
         if: always()
         shell: bash
         env:
-          CACHE_HIT: ${{ steps.nx-cache.outputs.cache-hit }}
           DURATION: ${{ steps.nx-run.outputs.duration }}
         run: |
           {
             echo "### Nx Type Check"
-            echo "- GitHub cache exact-key hit: ${CACHE_HIT:-false} (a restored prefix cache may still be used)"
+            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
             echo "- Nx affected execution: ${DURATION:-not completed} seconds"
             if [[ -f nx-type-check.log ]]; then
               echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-type-check.log || true)"
@@ -95,19 +81,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Initialize Nx cache directory
-        run: mkdir -p .nx/cache
-
-      - name: Restore Nx local task cache
-        id: nx-cache
-        uses: actions/cache@v4
-        with:
-          path: .nx/cache
-          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-lint
-          restore-keys: |
-            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
-            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
-
       - name: Validate affected lint targets
         id: nx-run
         shell: bash
@@ -121,12 +94,11 @@ jobs:
         if: always()
         shell: bash
         env:
-          CACHE_HIT: ${{ steps.nx-cache.outputs.cache-hit }}
           DURATION: ${{ steps.nx-run.outputs.duration }}
         run: |
           {
             echo "### Nx Lint"
-            echo "- GitHub cache exact-key hit: ${CACHE_HIT:-false} (a restored prefix cache may still be used)"
+            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
             echo "- Nx affected execution: ${DURATION:-not completed} seconds"
             if [[ -f nx-lint.log ]]; then
               echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-lint.log || true)"
@@ -158,19 +130,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Initialize Nx cache directory
-        run: mkdir -p .nx/cache
-
-      - name: Restore Nx local task cache
-        id: nx-cache
-        uses: actions/cache@v4
-        with:
-          path: .nx/cache
-          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-unit-tests
-          restore-keys: |
-            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
-            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
-
       - name: Validate affected test targets
         id: nx-run
         shell: bash
@@ -184,12 +143,11 @@ jobs:
         if: always()
         shell: bash
         env:
-          CACHE_HIT: ${{ steps.nx-cache.outputs.cache-hit }}
           DURATION: ${{ steps.nx-run.outputs.duration }}
         run: |
           {
             echo "### Nx Unit Tests"
-            echo "- GitHub cache exact-key hit: ${CACHE_HIT:-false} (a restored prefix cache may still be used)"
+            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
             echo "- Nx affected execution: ${DURATION:-not completed} seconds"
             if [[ -f nx-unit-tests.log ]]; then
               echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-unit-tests.log || true)"
@@ -221,19 +179,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Initialize Nx cache directory
-        run: mkdir -p .nx/cache
-
-      - name: Restore Nx local task cache
-        id: nx-cache
-        uses: actions/cache@v4
-        with:
-          path: .nx/cache
-          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-build
-          restore-keys: |
-            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-${{ github.run_id }}-
-            nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event.pull_request.number }}-
-
       - name: Compare PR-wide and isolated MFE1 affected projects
         shell: bash
         run: |
@@ -258,20 +203,6 @@ jobs:
           cat nx-mfe1-affected.txt >> "$GITHUB_STEP_SUMMARY"
           echo '~~~~' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Diagnose Nx cache location and task hashes
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "### Nx cache diagnostics" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Configured cache path: \`$NX_CACHE_DIRECTORY\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Nx version: $(npx nx --version | tail -1)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Restored cache files: $(find "$NX_CACHE_DIRECTORY" -type f 2>/dev/null | wc -l)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Restored cache size: $(du -sh "$NX_CACHE_DIRECTORY" 2>/dev/null | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Cache files at default path: $(find .nx/cache -type f 2>/dev/null | wc -l)" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Nx restored-cache trust warning check" >> "$GITHUB_STEP_SUMMARY"
-          echo "Nx local cache restored from GitHub Actions may be rejected as unrecognized on a different runner." >> "$GITHUB_STEP_SUMMARY"
-          echo "Task hashes are not collected by this diagnostic; no build commands are run here." >> "$GITHUB_STEP_SUMMARY"
-
       - name: Validate affected build targets
         id: nx-run
         shell: bash
@@ -285,12 +216,11 @@ jobs:
         if: always()
         shell: bash
         env:
-          CACHE_HIT: ${{ steps.nx-cache.outputs.cache-hit }}
           DURATION: ${{ steps.nx-run.outputs.duration }}
         run: |
           {
             echo "### Nx Angular Build"
-            echo "- GitHub cache exact-key hit: ${CACHE_HIT:-false} (a restored prefix cache may still be used)"
+            echo "- npm dependency downloads cached by setup-node; Nx task cache remains local to this job."
             echo "- Nx affected execution: ${DURATION:-not completed} seconds"
             if [[ -f nx-build.log ]]; then
               echo "- Nx cache-replay lines (indicative): $(grep -Eic 'read from cache|existing outputs match the cache|cache hit' nx-build.log || true)"
