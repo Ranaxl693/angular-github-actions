@@ -42,12 +42,40 @@
                   "maximumError": "8kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.production.ts"
+                }
+              ]
             },
             "development": {
               "optimization": false,
               "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.dev.ts"
+                }
+              ]
+            },
+            "cit": {
+              "optimization": false,
+              "extractLicenses": false,
               "sourceMap": true
+            },
+            "dev": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.dev.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -60,6 +88,12 @@
             },
             "development": {
               "buildTarget": "angular-github-actions:build:development"
+            },
+            "cit": {
+              "buildTarget": "angular-github-actions:build:cit"
+            },
+            "dev": {
+              "buildTarget": "angular-github-actions:build:dev"
             }
           },
           "defaultConfiguration": "development"

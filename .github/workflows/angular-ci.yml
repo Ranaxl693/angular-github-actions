@@ -1,38 +1,635 @@
 name: Angular CLI CI
+
 on:
   pull_request:
     branches: [develop]
     types: [opened, synchronize, reopened, ready_for_review]
+
 permissions:
   contents: read
-concurrency:
-  group: angular-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+
 jobs:
-  test:
-    name: Type Check and Unit Tests
+  type-check:
+    if: github.event_name == 'pull_request'
+    name: Type Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and npm cache
+        uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - name: Type check
-        run: npx tsc --noEmit -p tsconfig.app.json
-      - name: Unit tests
-        run: npm test -- --watch=false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type Check
+        run: npm run typecheck
+
+  lint:
+    needs: type-check
+    if: github.event_name == 'pull_request'
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+  unit-tests:
+    needs: lint
+    if: github.event_name == 'pull_request'
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit Tests
+        run: npm run test:ci
+
   build:
+    needs: unit-tests
+    if: github.event_name == 'pull_request'
     name: Angular Build
-    needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and npm cache
+        uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - name: Build
-        run: npm run build
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Angular Build
+        run: npm run build:pages
+
+      # Transport the parallel build output; only the gated job publishes a deployable artifact.
+      - name: Stage build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: angular-build-staging
+          path: dist/angular-github-actions/browser
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-artifact:
+    name: Publish Validated Artifact
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download staged build
+        uses: actions/download-artifact@v4
+        with:
+          name: angular-build-staging
+          path: validated-build
+
+      - name: Upload validated PR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: angular-pr-build
+          path: validated-build
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy-cit:
+    name: Deploy CIT to GitHub Pages
+    needs: publish-artifact
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Retain the complete site on the gh-pages state branch.
+      actions: read # Download artifacts from a different workflow run.
+      pages: write
+      id-token: write
+    # All folders share one Pages site; never overlap or interrupt deployments.
+    concurrency:
+      group: github-pages-cit-${{ github.run_id }}
+      cancel-in-progress: false
+    # Required reviewers for CIT are configured in GitHub Settings > Environments.
+    environment:
+      name: CIT
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      SELECTED_ENVIRONMENT: CIT
+    steps:
+      - name: Resolve saved Pages site
+        id: source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            try {
+              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
+              core.setOutput('state-ref', 'gh-pages');
+              core.setOutput('has-state', 'true');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('state-ref', context.payload.repository.default_branch);
+              core.setOutput('has-state', 'false');
+            }
+
+      - name: Download validated artifact from this PR run
+        uses: actions/download-artifact@v4
+        with:
+          name: angular-pr-build
+          path: pr-build
+
+      - name: Checkout saved Pages site
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.state-ref }}
+          path: deployment-state
+
+      - name: Initialize site state on first deployment
+        if: steps.source.outputs.has-state == 'false'
+        working-directory: deployment-state
+        run: git switch --orphan gh-pages
+
+      - name: Update selected folder and preserve the other environments
+        env:
+          SITE_ROOT: ${{ github.workspace }}/deployment-state
+          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
+          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          import shutil
+          from pathlib import Path
+
+          folders = {'CIT': 'cit', 'DEV': 'dev', 'SIT': 'sit', 'QA': 'qa', 'PRODUCTION': 'production', 'PROD': 'production'}
+          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
+          site = Path(os.environ['SITE_ROOT'])
+          artifact = Path(os.environ['ARTIFACT_ROOT'])
+          publish = Path(os.environ['PUBLISH_ROOT'])
+          if any(path.is_symlink() for path in artifact.rglob('*')):
+              raise RuntimeError('Build artifact must not contain symbolic links')
+          if '<base href="./">' not in (artifact / 'index.html').read_text():
+              raise RuntimeError('PR artifact must be built with --base-href ./')
+          target = site / folder
+          if target.is_symlink():
+              target.unlink()
+          elif target.exists():
+              shutil.rmtree(target)
+          shutil.copytree(artifact, target)
+          publish.mkdir(parents=True, exist_ok=True)
+          for name in folders.values():
+              existing = site / name
+              if existing.is_symlink():
+                  raise RuntimeError('Saved environment folders must not be symbolic links')
+              if existing.is_dir():
+                  if any(path.is_symlink() for path in existing.rglob('*')):
+                      raise RuntimeError('Saved site must not contain symbolic links')
+                  shutil.copytree(existing, publish / name)
+          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
+          print(f'Deploying validated PR artifact to /{folder}/')
+          PYTHON
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload complete Pages site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/pages-site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Save deployed folders for the next manual run
+        working-directory: deployment-state
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for folder in cit dev sit qa production; do
+            if [[ -d "$folder" ]]; then
+              git add -- "$folder"
+            fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
+            git push origin HEAD:gh-pages
+          fi
+
+      - name: Report deployed URL
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          folder="${SELECTED_ENVIRONMENT,,}"
+          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
+          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-dev:
+    name: Deploy DEV to GitHub Pages
+    needs: publish-artifact
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Retain the complete site on the gh-pages state branch.
+      actions: read # Download artifacts from a different workflow run.
+      pages: write
+      id-token: write
+    # All folders share one Pages site; never overlap or interrupt deployments.
+    concurrency:
+      group: github-pages-dev-${{ github.run_id }}
+      cancel-in-progress: false
+    # Required reviewers for DEV are configured in GitHub Settings > Environments.
+    environment:
+      name: DEV
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      SELECTED_ENVIRONMENT: DEV
+    steps:
+      - name: Resolve saved Pages site
+        id: source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            try {
+              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
+              core.setOutput('state-ref', 'gh-pages');
+              core.setOutput('has-state', 'true');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('state-ref', context.payload.repository.default_branch);
+              core.setOutput('has-state', 'false');
+            }
+
+      - name: Download validated artifact from this PR run
+        uses: actions/download-artifact@v4
+        with:
+          name: angular-pr-build
+          path: pr-build
+
+      - name: Checkout saved Pages site
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.state-ref }}
+          path: deployment-state
+
+      - name: Initialize site state on first deployment
+        if: steps.source.outputs.has-state == 'false'
+        working-directory: deployment-state
+        run: git switch --orphan gh-pages
+
+      - name: Update selected folder and preserve the other environments
+        env:
+          SITE_ROOT: ${{ github.workspace }}/deployment-state
+          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
+          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          import shutil
+          from pathlib import Path
+
+          folders = {'CIT': 'cit', 'DEV': 'dev', 'QA': 'qa', 'PRODUCTION': 'production'}
+          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
+          site = Path(os.environ['SITE_ROOT'])
+          artifact = Path(os.environ['ARTIFACT_ROOT'])
+          publish = Path(os.environ['PUBLISH_ROOT'])
+          if any(path.is_symlink() for path in artifact.rglob('*')):
+              raise RuntimeError('Build artifact must not contain symbolic links')
+          if '<base href="./">' not in (artifact / 'index.html').read_text():
+              raise RuntimeError('PR artifact must be built with --base-href ./')
+          target = site / folder
+          if target.is_symlink():
+              target.unlink()
+          elif target.exists():
+              shutil.rmtree(target)
+          shutil.copytree(artifact, target)
+          publish.mkdir(parents=True, exist_ok=True)
+          for name in folders.values():
+              existing = site / name
+              if existing.is_symlink():
+                  raise RuntimeError('Saved environment folders must not be symbolic links')
+              if existing.is_dir():
+                  if any(path.is_symlink() for path in existing.rglob('*')):
+                      raise RuntimeError('Saved site must not contain symbolic links')
+                  shutil.copytree(existing, publish / name)
+          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
+          print(f'Deploying validated PR artifact to /{folder}/')
+          PYTHON
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload complete Pages site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/pages-site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Save deployed folders for the next manual run
+        working-directory: deployment-state
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for folder in cit dev sit qa production; do
+            if [[ -d "$folder" ]]; then
+              git add -- "$folder"
+            fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
+            git push origin HEAD:gh-pages
+          fi
+
+      - name: Report deployed URL
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          folder="${SELECTED_ENVIRONMENT,,}"
+          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
+          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-sit:
+    name: Deploy SIT to GitHub Pages
+    needs: publish-artifact
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Retain the complete site on the gh-pages state branch.
+      actions: read # Download artifacts from a different workflow run.
+      pages: write
+      id-token: write
+    # All folders share one Pages site; never overlap or interrupt deployments.
+    concurrency:
+      group: github-pages-sit-${{ github.run_id }}
+      cancel-in-progress: false
+    # Required reviewers for SIT are configured in GitHub Settings > Environments.
+    environment:
+      name: SIT
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      SELECTED_ENVIRONMENT: SIT
+    steps:
+      - name: Resolve saved Pages site
+        id: source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            try {
+              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
+              core.setOutput('state-ref', 'gh-pages');
+              core.setOutput('has-state', 'true');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('state-ref', context.payload.repository.default_branch);
+              core.setOutput('has-state', 'false');
+            }
+
+      - name: Download validated artifact from this PR run
+        uses: actions/download-artifact@v4
+        with:
+          name: angular-pr-build
+          path: pr-build
+
+      - name: Checkout saved Pages site
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.state-ref }}
+          path: deployment-state
+
+      - name: Initialize site state on first deployment
+        if: steps.source.outputs.has-state == 'false'
+        working-directory: deployment-state
+        run: git switch --orphan gh-pages
+
+      - name: Update selected folder and preserve the other environments
+        env:
+          SITE_ROOT: ${{ github.workspace }}/deployment-state
+          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
+          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          import shutil
+          from pathlib import Path
+
+          folders = {'CIT': 'cit', 'DEV': 'dev', 'QA': 'qa', 'PRODUCTION': 'production'}
+          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
+          site = Path(os.environ['SITE_ROOT'])
+          artifact = Path(os.environ['ARTIFACT_ROOT'])
+          publish = Path(os.environ['PUBLISH_ROOT'])
+          if any(path.is_symlink() for path in artifact.rglob('*')):
+              raise RuntimeError('Build artifact must not contain symbolic links')
+          if '<base href="./">' not in (artifact / 'index.html').read_text():
+              raise RuntimeError('PR artifact must be built with --base-href ./')
+          target = site / folder
+          if target.is_symlink():
+              target.unlink()
+          elif target.exists():
+              shutil.rmtree(target)
+          shutil.copytree(artifact, target)
+          publish.mkdir(parents=True, exist_ok=True)
+          for name in folders.values():
+              existing = site / name
+              if existing.is_symlink():
+                  raise RuntimeError('Saved environment folders must not be symbolic links')
+              if existing.is_dir():
+                  if any(path.is_symlink() for path in existing.rglob('*')):
+                      raise RuntimeError('Saved site must not contain symbolic links')
+                  shutil.copytree(existing, publish / name)
+          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
+          print(f'Deploying validated PR artifact to /{folder}/')
+          PYTHON
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload complete Pages site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/pages-site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Save deployed folders for the next manual run
+        working-directory: deployment-state
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for folder in cit dev sit qa production; do
+            if [[ -d "$folder" ]]; then
+              git add -- "$folder"
+            fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
+            git push origin HEAD:gh-pages
+          fi
+
+      - name: Report deployed URL
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          folder="${SELECTED_ENVIRONMENT,,}"
+          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
+          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
+
+
+  deploy-prod:
+    name: Deploy PROD to GitHub Pages
+    needs: publish-artifact
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Retain the complete site on the gh-pages state branch.
+      actions: read # Download artifacts from a different workflow run.
+      pages: write
+      id-token: write
+    # All folders share one Pages site; never overlap or interrupt deployments.
+    concurrency:
+      group: github-pages-prod-${{ github.run_id }}
+      cancel-in-progress: false
+    # IMPORTANT: Enable Required reviewers for PROD in GitHub Settings > Environments before using this job.
+    environment:
+      name: PROD
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      SELECTED_ENVIRONMENT: PROD
+    steps:
+      - name: Resolve saved Pages site
+        id: source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            try {
+              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
+              core.setOutput('state-ref', 'gh-pages');
+              core.setOutput('has-state', 'true');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('state-ref', context.payload.repository.default_branch);
+              core.setOutput('has-state', 'false');
+            }
+
+      - name: Download validated artifact from this PR run
+        uses: actions/download-artifact@v4
+        with:
+          name: angular-pr-build
+          path: pr-build
+
+      - name: Checkout saved Pages site
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.state-ref }}
+          path: deployment-state
+
+      - name: Initialize site state on first deployment
+        if: steps.source.outputs.has-state == 'false'
+        working-directory: deployment-state
+        run: git switch --orphan gh-pages
+
+      - name: Update selected folder and preserve the other environments
+        env:
+          SITE_ROOT: ${{ github.workspace }}/deployment-state
+          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
+          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          import shutil
+          from pathlib import Path
+
+          folders = {'CIT': 'cit', 'DEV': 'dev', 'SIT': 'sit', 'QA': 'qa', 'PRODUCTION': 'production', 'PROD': 'production'}
+          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
+          site = Path(os.environ['SITE_ROOT'])
+          artifact = Path(os.environ['ARTIFACT_ROOT'])
+          publish = Path(os.environ['PUBLISH_ROOT'])
+          if any(path.is_symlink() for path in artifact.rglob('*')):
+              raise RuntimeError('Build artifact must not contain symbolic links')
+          if '<base href="./">' not in (artifact / 'index.html').read_text():
+              raise RuntimeError('PR artifact must be built with --base-href ./')
+          target = site / folder
+          if target.is_symlink():
+              target.unlink()
+          elif target.exists():
+              shutil.rmtree(target)
+          shutil.copytree(artifact, target)
+          publish.mkdir(parents=True, exist_ok=True)
+          for name in folders.values():
+              existing = site / name
+              if existing.is_symlink():
+                  raise RuntimeError('Saved environment folders must not be symbolic links')
+              if existing.is_dir():
+                  if any(path.is_symlink() for path in existing.rglob('*')):
+                      raise RuntimeError('Saved site must not contain symbolic links')
+                  shutil.copytree(existing, publish / name)
+          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
+          print(f'Deploying validated PR artifact to /{folder}/')
+          PYTHON
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload complete Pages site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/pages-site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Save deployed folders for the next manual run
+        working-directory: deployment-state
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for folder in cit dev sit qa production; do
+            if [[ -d "$folder" ]]; then
+              git add -- "$folder"
+            fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
+            git push origin HEAD:gh-pages
+          fi
+
+      - name: Report deployed URL
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          folder="${SELECTED_ENVIRONMENT,,}"
+          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
+          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
