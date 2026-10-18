@@ -120,3 +120,4 @@ failure should leave **Angular Build** skipped. No merge or deployment is perfor
 
 If branch protection requires the old combined check name, update that rule to
 require the new check names so the PR is evaluated against the current workflow.
+
