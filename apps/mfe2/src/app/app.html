@@ -1,0 +1,8 @@
+<app-ui-card title="MFE 2 · Selection">
+  <p>This selection summary is loaded from the mfe2 remote.</p>
+  <p>
+    Selected items: <strong data-testid="selection-count">{{ workspace.selectedCount() }}</strong>
+  </p>
+  <button type="button" (click)="workspace.clear()">Clear selection</button>
+  <p>Add items in MFE 1, then return here. The count is shared through lib-core.</p>
+</app-ui-card>

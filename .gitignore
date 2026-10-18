@@ -42,3 +42,10 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Nx task cache and workspace metadata
+/.nx
+
+# Browser test output
+/test-results
+/playwright-report

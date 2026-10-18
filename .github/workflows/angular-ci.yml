@@ -92,7 +92,13 @@ jobs:
       - name: Angular Build
         run: npm run build:pages
 
-      # Transport the parallel build output; only the gated job publishes a deployable artifact.
+      - name: Install browser for federation checks
+        run: npm exec -- playwright install --with-deps chromium
+
+      - name: Verify federated application in a browser
+        run: npm run e2e
+
+      # Package the host and both remotes only after browser checks pass.
       - name: Stage build output
         uses: actions/upload-artifact@v4
         with:
@@ -504,7 +510,6 @@ jobs:
           folder="${SELECTED_ENVIRONMENT,,}"
           echo "Deployed URL: ${PAGE_URL%/}/$folder/"
           echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
-
 
   deploy-prod:
     name: Deploy PROD to GitHub Pages

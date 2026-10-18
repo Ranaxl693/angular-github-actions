@@ -3,14 +3,21 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
-    "watch": "ng build --watch --configuration development",
-    "test": "ng test",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "lint": "eslint \"src/**/*.{ts,html}\" --max-warnings=0",
-    "test:ci": "ng test --watch=false",
-    "build:pages": "npm run build -- --base-href ./"
+    "start": "nx run-many -t serve --projects=host,mfe1,mfe2 --parallel=3",
+    "build": "nx run-many -t build --projects=host,mfe1,mfe2",
+    "watch": "ng build host --configuration development --watch",
+    "test": "ng test host",
+    "typecheck": "nx run-many -t typecheck --all",
+    "lint": "nx run-many -t lint --all",
+    "test:ci": "nx run-many -t test --all",
+    "build:pages": "nx run-many -t build --projects=host,mfe1,mfe2 --configuration pages && node tools/package-pages.mjs",
+    "nx": "nx",
+    "start:host": "nx serve host",
+    "start:mfe1": "nx serve mfe1",
+    "start:mfe2": "nx serve mfe2",
+    "graph": "nx graph",
+    "e2e": "playwright test",
+    "preview:pages": "node tools/preview-pages.mjs"
   },
   "private": true,
   "packageManager": "npm@11.19.1",
@@ -21,17 +28,21 @@
     "@angular/forms": "^22.2.0",
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
+    "es-module-shims": "^2.8.4",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
+    "@angular-architects/native-federation": "22.2.2",
     "@angular/build": "^22.2.3",
     "@angular/cli": "^22.2.3",
     "@angular/compiler-cli": "^22.2.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "angular-eslint": "^22.6.0",
     "eslint": "^10.13.0",
     "jsdom": "^30.0.0",
+    "nx": "23.3.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.71.2",
@@ -39,5 +50,13 @@
   },
   "engines": {
     "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+  },
+  "overrides": {
+    "nx": {
+      "undici": "^7.29.1"
+    }
+  },
+  "nx": {
+    "includedScripts": []
   }
 }
