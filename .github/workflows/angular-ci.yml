@@ -24,7 +24,7 @@ jobs:
       - name: Unit tests
         run: npm test -- --watch=false
   build:
-    name: CIT Build
+    name: Common Angular Build
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -34,5 +34,5 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Build CIT
-        run: npm run build -- --configuration cit
+      - name: Build
+        run: npm run build
