@@ -10,5 +10,5 @@ import { Card } from '@workspace/lib-ui';
 })
 export class App {
   protected readonly workspace = inject(WorkspaceState);
-  title: string = 'MFE2-Balle-Balle-222-You can edit this title in apps/mfe2/src/app/app.ts';
+  title: string = 'MFE2';
 }
