@@ -14,5 +14,5 @@ import { environment } from '../environments/environment';
 export class App {
   protected readonly workspace = inject(WorkspaceState);
   protected readonly environmentName = environment.environmentName;
-  protected readonly title = signal('angular-github-actions-your-host');
+  protected readonly title = signal('angular-github-actions-your-host-1');
 }
