@@ -17,7 +17,12 @@
     "start:mfe2": "nx serve mfe2 --outputStyle=static",
     "graph": "nx graph",
     "e2e": "playwright test",
-    "preview:pages": "node tools/preview-pages.mjs"
+    "preview:pages": "node tools/preview-pages.mjs",
+    "affected:projects": "bash -c 'set -euo pipefail; set -x; npx nx show projects --affected --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --json'",
+    "typecheck:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t typecheck --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --outputStyle=static'",
+    "lint:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t lint --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --outputStyle=static'",
+    "test:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t test --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --outputStyle=static'",
+    "build:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t build --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --configuration=pages --outputStyle=static'"
   },
   "private": true,
   "packageManager": "npm@11.19.1",

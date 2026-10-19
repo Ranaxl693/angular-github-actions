@@ -9,6 +9,7 @@ permissions:
   contents: read
 
 # Pin the comparison to this PR event on every runner.
+# Package scripts trace the expanded npx commands; npm banners stay suppressed.
 env:
   NX_BASE: ${{ github.event.pull_request.base.sha }}
   NX_HEAD: ${{ github.sha }}
@@ -39,9 +40,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          set -x
-          npx nx show projects --affected --base="$NX_BASE" --head="$NX_HEAD" --json
-          npx nx affected -t typecheck --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
+          npm run --silent affected:projects
+          npm run --silent typecheck:affected
   lint:
     name: Lint
     needs: type-check
@@ -68,9 +68,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          set -x
-          npx nx show projects --affected --base="$NX_BASE" --head="$NX_HEAD" --json
-          npx nx affected -t lint --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
+          npm run --silent affected:projects
+          npm run --silent lint:affected
   unit-tests:
     name: Unit Tests
     needs: lint
@@ -97,9 +96,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          set -x
-          npx nx show projects --affected --base="$NX_BASE" --head="$NX_HEAD" --json
-          npx nx affected -t test --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
+          npm run --silent affected:projects
+          npm run --silent test:affected
   build:
     name: Angular Build
     needs: unit-tests
@@ -128,14 +126,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          set -x
-          npx nx show projects --affected --base="$NX_BASE" --head="$NX_HEAD" --json | tee "$RUNNER_TEMP/affected-projects.json"
+          npm run --silent affected:projects | tee "$RUNNER_TEMP/affected-projects.json"
       - name: Build affected projects
         shell: bash
         run: |
           set -euo pipefail
-          set -x
-          npx nx affected -t build --base="$NX_BASE" --head="$NX_HEAD" --configuration=pages --outputStyle=static
+          npm run --silent build:affected
       - name: Package affected application outputs
         id: package
         run: node tools/package-affected-pages.mjs "$RUNNER_TEMP/affected-projects.json"
