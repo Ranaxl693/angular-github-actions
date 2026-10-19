@@ -135,7 +135,7 @@ jobs:
         run: |
           set -euo pipefail
           set -x
-          npx nx affected -t build --base="$NX_BASE" --head="$NX_HEAD" --configuration=pages --outputStyle=static --skipNxCache
+          npx nx affected -t build --base="$NX_BASE" --head="$NX_HEAD" --configuration=pages --outputStyle=static
       - name: Package affected application outputs
         id: package
         run: node tools/package-affected-pages.mjs "$RUNNER_TEMP/affected-projects.json"
