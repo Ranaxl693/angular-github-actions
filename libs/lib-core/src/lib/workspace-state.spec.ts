@@ -1,7 +1,7 @@
 import { WorkspaceState } from './workspace-state';
 
 describe('WorkspaceState', () => {
-  it('adds items and clears the shared', () => {
+  it('adds items and clears the shared selection', () => {
     const state = new WorkspaceState();
     state.addItem();
     state.addItem();
