@@ -168,7 +168,7 @@ npx nx show projects --affected --base="$NX_BASE" --head="$NX_HEAD" --json
 ```
 
 Typecheck, lint, test and build use `nx affected` with that same pair. Build runs
-with `--configuration=pages --skipNxCache`; there is no prior-run artifact lookup,
+with `--configuration=pages` and normal Nx local caching; there is no prior-run artifact lookup,
 download, commit comparison or application-output reuse in the build job.
 `tools/package-affected-pages.mjs` packages only applications in the printed Nx
 list. If no applications are affected, publishing and deployment are skipped.
