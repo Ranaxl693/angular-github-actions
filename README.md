@@ -159,9 +159,24 @@ The Pages artifact path remains `dist/angular-github-actions/browser`, so existi
 folder deployment steps copy the host **and both remotes** together. No additional
 workflow, deployment provider, or approval rule is introduced by this migration.
 
-The `.github/workflows/nx-multi-runner-ci.yml` build uses the `pages`
-configuration once. It reuses application outputs only from a successful prior
-run of the same PR, rebuilding apps Nx reports affected since that artifact and
-restoring unchanged outputs. Missing or incompatible artifacts cause the missing
-apps (or all apps when no reusable artifact exists) to be built, so the published
-Pages artifact always contains the host and both remotes.
+The `.github/workflows/nx-multi-runner-ci.yml` runners compare the PR event's base
+SHA with its checked-out merge SHA (`github.sha`). Both references are fixed for
+the run. Each runner logs the expanded command and affected project names:
+
+```bash
+npx nx show projects --affected --base="$NX_BASE" --head="$NX_HEAD" --json
+```
+
+Typecheck, lint, test and build use `nx affected` with that same pair. Build runs
+with `--configuration=pages --skipNxCache`; there is no prior-run artifact lookup,
+download, commit comparison or application-output reuse in the build job.
+`tools/package-affected-pages.mjs` packages only applications in the printed Nx
+list. If no applications are affected, publishing and deployment are skipped.
+The staging and validated artifacts only transfer **this run's** outputs between
+runners; they are not a cache.
+
+Deployments replace affected applications in the selected environment and retain
+its other applications from the existing `gh-pages` site. Host updates recreate
+the clean-route entry pages and relative federation manifest. A new environment
+needs a complete host + mfe1 + mfe2 deployment first; an incomplete first deployment
+fails instead of publishing a broken site.
