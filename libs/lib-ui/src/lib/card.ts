@@ -13,7 +13,7 @@ import { Component, input } from '@angular/core';
       padding: 1.5rem;
       border: 1px solid #d8dfeb;
       border-radius: 1rem;
-      background: #f2f2f2;
+      background: red;
     }
     h2 {
       margin-top: 0;
