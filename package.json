@@ -14,9 +14,9 @@
     "e2e": "playwright test",
     "preview:pages": "node tools/preview-pages.mjs",
     "affected:projects": "bash -c 'set -euo pipefail; set -x; npx nx show projects --affected --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --json'",
-    "typecheck:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t typecheck --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --parallel=3 --outputStyle=static'",
-    "lint:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t lint --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --parallel=3 --outputStyle=static'",
-    "test:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t test --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --parallel=3 --outputStyle=static'",
+    "typecheck:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t typecheck --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --outputStyle=static'",
+    "lint:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t lint --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --outputStyle=static'",
+    "test:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t test --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --outputStyle=static'",
     "build:affected": "bash -c 'set -euo pipefail; set -x; npx nx affected -t build --base=\"$NX_BASE\" --head=\"$NX_HEAD\" --configuration=pages --outputStyle=static'"
   },
   "private": true,
