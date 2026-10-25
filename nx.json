@@ -16,23 +16,11 @@
     "production": ["default", "!{projectRoot}/**/*.spec.ts", "!{projectRoot}/tsconfig.spec.json"]
   },
   "targetDefaults": {
-    "build": {
-      "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["production", "^production"]
-    },
-    "typecheck": {
-      "cache": true,
-      "inputs": ["default", "^default"]
-    },
-    "lint": {
-      "cache": true,
-      "inputs": ["default", "^default"]
-    },
-    "test": {
-      "cache": true,
-      "inputs": ["default", "^default"]
-    }
+    "build": { "cache": true, "dependsOn": ["^build"], "inputs": ["production", "^production"] },
+    "typecheck": { "cache": true, "inputs": ["default", "^default"] },
+    "lint": { "cache": true, "inputs": ["default", "^default"] },
+    "test": { "cache": true, "inputs": ["default", "^default"] }
   },
-  "analytics": false
+  "analytics": false,
+  "nxCloudId": "6addb33846bda66aa5f490b2"
 }
