@@ -1,4 +1,4 @@
-name: Nx Angular CI (Multi Runner)
+name: Nx Cloud POC (Multi Runner)
 
 on:
   pull_request:
@@ -13,6 +13,7 @@ permissions:
 env:
   NX_BASE: ${{ github.event.pull_request.base.sha }}
   NX_HEAD: ${{ github.sha }}
+  NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
 
 jobs:
   type-check:
@@ -21,7 +22,6 @@ jobs:
     permissions:
       contents: read
     env:
-      NX_CLOUD: 'false'
       NX_DAEMON: 'false'
     steps:
       - name: Checkout full history
@@ -49,7 +49,6 @@ jobs:
     permissions:
       contents: read
     env:
-      NX_CLOUD: 'false'
       NX_DAEMON: 'false'
     steps:
       - name: Checkout full history
@@ -77,7 +76,6 @@ jobs:
     permissions:
       contents: read
     env:
-      NX_CLOUD: 'false'
       NX_DAEMON: 'false'
     steps:
       - name: Checkout full history
@@ -104,10 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    outputs:
-      has-apps: ${{ steps.package.outputs.has-apps }}
     env:
-      NX_CLOUD: 'false'
       NX_DAEMON: 'false'
     steps:
       - name: Checkout full history
@@ -127,636 +122,41 @@ jobs:
         run: |
           set -euo pipefail
           npm run --silent affected:projects | tee "$RUNNER_TEMP/affected-projects.json"
-      - name: Build affected projects
+      # Build all apps once to seed the remote cache for this POC.
+      - name: Seed application build cache
         shell: bash
         run: |
           set -euo pipefail
-          npm run --silent build:affected
-      - name: Package affected application outputs
-        id: package
-        run: node tools/package-affected-pages.mjs "$RUNNER_TEMP/affected-projects.json"
-      - name: Upload staged build
-        if: steps.package.outputs.has-apps == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: angular-build-staging
-          path: dist/affected-pages
-          if-no-files-found: error
-          retention-days: 1
+          npx nx run-many -t build --projects=host,mfe1,mfe2 --configuration=pages --outputStyle=static
 
-  publish-artifact:
-    name: Publish Validated Artifact
+  verify-remote-cache:
+    name: Verify cache on a fresh runner
     needs: build
-    if: needs.build.outputs.has-apps == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Download staged build
-        uses: actions/download-artifact@v4
-        with:
-          name: angular-build-staging
-          path: validated-build
-      - name: Publish validated PR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: angular-pr-build
-          path: validated-build
-          if-no-files-found: error
-          retention-days: 30
-
-  deploy-cit:
-    name: Deploy CIT to GitHub Pages
-    needs: publish-artifact
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Retain the complete site on the gh-pages state branch.
-      pages: write
-      id-token: write
-    # Scope concurrency to this run, so earlier runs cannot block this deployment.
-    concurrency:
-      group: github-pages-cit-${{ github.run_id }}
-      cancel-in-progress: false
-    # Required reviewers for CIT are configured in GitHub Settings > Environments.
-    environment:
-      name: CIT
-      url: ${{ steps.deployment.outputs.page_url }}
     env:
-      SELECTED_ENVIRONMENT: CIT
+      NX_DAEMON: 'false'
     steps:
-      - name: Resolve saved Pages site
-        id: source
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const repo = context.repo;
-            try {
-              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
-              core.setOutput('state-ref', 'gh-pages');
-              core.setOutput('has-state', 'true');
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              core.setOutput('state-ref', context.payload.repository.default_branch);
-              core.setOutput('has-state', 'false');
-            }
-
-      - name: Download validated artifact from this PR run
-        uses: actions/download-artifact@v4
-        with:
-          name: angular-pr-build
-          path: pr-build
-
-      - name: Checkout saved Pages site
+      - name: Checkout identical commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.source.outputs.state-ref }}
-          path: deployment-state
-
-      - name: Initialize site state on first deployment
-        if: steps.source.outputs.has-state == 'false'
-        working-directory: deployment-state
-        run: git switch --orphan gh-pages
-
-      - name: Update selected folder and preserve the other environments
-        env:
-          SITE_ROOT: ${{ github.workspace }}/deployment-state
-          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
-          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Setup Node and npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Restore builds through Nx Cloud
+        shell: bash
         run: |
-          python3 - <<'PYTHON'
-          import os
-          import shutil
-          from pathlib import Path
-
-          folders = dict(CIT='cit', DEV='dev', SIT='sit', QA='qa', PROD='production') # environments
-          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
-          site = Path(os.environ['SITE_ROOT'])
-          artifact = Path(os.environ['ARTIFACT_ROOT'])
-          publish = Path(os.environ['PUBLISH_ROOT'])
-          for root in (artifact, site):
-              if root.is_symlink() or any(path.is_symlink() for path in root.rglob('*')):
-                  raise RuntimeError('Build outputs and saved site must not contain symbolic links')
-          target = site / folder
-          assembled = publish / folder
-          host = artifact / 'host'
-          if host.is_dir():
-              shutil.copytree(host, assembled)
-              if (target / 'remotes').is_dir():
-                  shutil.copytree(target / 'remotes', assembled / 'remotes')
-          elif (target / 'index.html').is_file():
-              shutil.copytree(target, assembled)
-          else:
-              raise RuntimeError('No deployed host for this environment. Deploy a full host + mfe1 + mfe2 build first.')
-          for remote in ('mfe1', 'mfe2'):
-              source = artifact / remote
-              destination = assembled / 'remotes' / remote
-              if source.is_dir():
-                  if destination.exists():
-                      shutil.rmtree(destination)
-                  shutil.copytree(source, destination)
-              if not (destination / 'remoteEntry.json').is_file():
-                  raise RuntimeError(f'Missing {remote}. Deploy a full host + mfe1 + mfe2 build first.')
-          index = (assembled / 'index.html').read_text()
-          if '<base href="./">' not in index:
-              raise RuntimeError('Host must be built with --base-href ./')
-          for route in ('mfe1', 'mfe2'):
-              (assembled / route).mkdir(exist_ok=True)
-              (assembled / route / 'index.html').write_text(index.replace('<base href="./">', '<base href="../">'))
-          import json
-          manifest = {remote: f'./remotes/{remote}/remoteEntry.json' for remote in ('mfe1', 'mfe2')}
-          (assembled / 'federation.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-          if target.exists():
-              shutil.rmtree(target)
-          shutil.copytree(assembled, target)
-          for name in folders.values():
-              existing = site / name
-              if name != folder and existing.is_dir():
-                  shutil.copytree(existing, publish / name)
-          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Updated applications: {", ".join(sorted(path.name for path in artifact.iterdir() if path.is_dir()))}')
-          print(f'Deploying to /{folder}/; unchanged applications preserved from this environment')
-          PYTHON
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload complete Pages site
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ${{ runner.temp }}/pages-site
-
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Save deployed folders for the next manual run
-        working-directory: deployment-state
+          set -euo pipefail
+          npx nx run-many -t build --projects=host,mfe1,mfe2 --configuration=pages --outputStyle=static
+      - name: Verify restored application outputs
+        shell: bash
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for folder in cit dev sit qa production; do
-            if [[ -d "$folder" ]]; then
-              git add -- "$folder"
-            fi
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
-            git push origin HEAD:gh-pages
-          fi
-
-      - name: Report deployed URL
-        env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          folder="${SELECTED_ENVIRONMENT,,}"
-          if [[ "$folder" == "prod" ]]; then folder="production"; fi
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-dev:
-    name: Deploy DEV to GitHub Pages
-    needs: publish-artifact
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Retain the complete site on the gh-pages state branch.
-      pages: write
-      id-token: write
-    # Scope concurrency to this run, so earlier runs cannot block this deployment.
-    concurrency:
-      group: github-pages-dev-${{ github.run_id }}
-      cancel-in-progress: false
-    # Required reviewers for DEV are configured in GitHub Settings > Environments.
-    environment:
-      name: DEV
-      url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      SELECTED_ENVIRONMENT: DEV
-    steps:
-      - name: Resolve saved Pages site
-        id: source
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const repo = context.repo;
-            try {
-              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
-              core.setOutput('state-ref', 'gh-pages');
-              core.setOutput('has-state', 'true');
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              core.setOutput('state-ref', context.payload.repository.default_branch);
-              core.setOutput('has-state', 'false');
-            }
-
-      - name: Download validated artifact from this PR run
-        uses: actions/download-artifact@v4
-        with:
-          name: angular-pr-build
-          path: pr-build
-
-      - name: Checkout saved Pages site
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.source.outputs.state-ref }}
-          path: deployment-state
-
-      - name: Initialize site state on first deployment
-        if: steps.source.outputs.has-state == 'false'
-        working-directory: deployment-state
-        run: git switch --orphan gh-pages
-
-      - name: Update selected folder and preserve the other environments
-        env:
-          SITE_ROOT: ${{ github.workspace }}/deployment-state
-          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
-          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
-        run: |
-          python3 - <<'PYTHON'
-          import os
-          import shutil
-          from pathlib import Path
-
-          folders = dict(CIT='cit', DEV='dev', SIT='sit', QA='qa', PROD='production') # environments
-          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
-          site = Path(os.environ['SITE_ROOT'])
-          artifact = Path(os.environ['ARTIFACT_ROOT'])
-          publish = Path(os.environ['PUBLISH_ROOT'])
-          for root in (artifact, site):
-              if root.is_symlink() or any(path.is_symlink() for path in root.rglob('*')):
-                  raise RuntimeError('Build outputs and saved site must not contain symbolic links')
-          target = site / folder
-          assembled = publish / folder
-          host = artifact / 'host'
-          if host.is_dir():
-              shutil.copytree(host, assembled)
-              if (target / 'remotes').is_dir():
-                  shutil.copytree(target / 'remotes', assembled / 'remotes')
-          elif (target / 'index.html').is_file():
-              shutil.copytree(target, assembled)
-          else:
-              raise RuntimeError('No deployed host for this environment. Deploy a full host + mfe1 + mfe2 build first.')
-          for remote in ('mfe1', 'mfe2'):
-              source = artifact / remote
-              destination = assembled / 'remotes' / remote
-              if source.is_dir():
-                  if destination.exists():
-                      shutil.rmtree(destination)
-                  shutil.copytree(source, destination)
-              if not (destination / 'remoteEntry.json').is_file():
-                  raise RuntimeError(f'Missing {remote}. Deploy a full host + mfe1 + mfe2 build first.')
-          index = (assembled / 'index.html').read_text()
-          if '<base href="./">' not in index:
-              raise RuntimeError('Host must be built with --base-href ./')
-          for route in ('mfe1', 'mfe2'):
-              (assembled / route).mkdir(exist_ok=True)
-              (assembled / route / 'index.html').write_text(index.replace('<base href="./">', '<base href="../">'))
-          import json
-          manifest = {remote: f'./remotes/{remote}/remoteEntry.json' for remote in ('mfe1', 'mfe2')}
-          (assembled / 'federation.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-          if target.exists():
-              shutil.rmtree(target)
-          shutil.copytree(assembled, target)
-          for name in folders.values():
-              existing = site / name
-              if name != folder and existing.is_dir():
-                  shutil.copytree(existing, publish / name)
-          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Updated applications: {", ".join(sorted(path.name for path in artifact.iterdir() if path.is_dir()))}')
-          print(f'Deploying to /{folder}/; unchanged applications preserved from this environment')
-          PYTHON
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload complete Pages site
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ${{ runner.temp }}/pages-site
-
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Save deployed folders for the next manual run
-        working-directory: deployment-state
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for folder in cit dev sit qa production; do
-            if [[ -d "$folder" ]]; then
-              git add -- "$folder"
-            fi
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
-            git push origin HEAD:gh-pages
-          fi
-
-      - name: Report deployed URL
-        env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          folder="${SELECTED_ENVIRONMENT,,}"
-          if [[ "$folder" == "prod" ]]; then folder="production"; fi
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-sit:
-    name: Deploy SIT to GitHub Pages
-    needs: publish-artifact
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Retain the complete site on the gh-pages state branch.
-      pages: write
-      id-token: write
-    # Scope concurrency to this run, so earlier runs cannot block this deployment.
-    concurrency:
-      group: github-pages-sit-${{ github.run_id }}
-      cancel-in-progress: false
-    # Required reviewers for SIT are configured in GitHub Settings > Environments.
-    environment:
-      name: SIT
-      url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      SELECTED_ENVIRONMENT: SIT
-    steps:
-      - name: Resolve saved Pages site
-        id: source
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const repo = context.repo;
-            try {
-              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
-              core.setOutput('state-ref', 'gh-pages');
-              core.setOutput('has-state', 'true');
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              core.setOutput('state-ref', context.payload.repository.default_branch);
-              core.setOutput('has-state', 'false');
-            }
-
-      - name: Download validated artifact from this PR run
-        uses: actions/download-artifact@v4
-        with:
-          name: angular-pr-build
-          path: pr-build
-
-      - name: Checkout saved Pages site
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.source.outputs.state-ref }}
-          path: deployment-state
-
-      - name: Initialize site state on first deployment
-        if: steps.source.outputs.has-state == 'false'
-        working-directory: deployment-state
-        run: git switch --orphan gh-pages
-
-      - name: Update selected folder and preserve the other environments
-        env:
-          SITE_ROOT: ${{ github.workspace }}/deployment-state
-          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
-          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
-        run: |
-          python3 - <<'PYTHON'
-          import os
-          import shutil
-          from pathlib import Path
-
-          folders = dict(CIT='cit', DEV='dev', SIT='sit', QA='qa', PROD='production') # environments
-          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
-          site = Path(os.environ['SITE_ROOT'])
-          artifact = Path(os.environ['ARTIFACT_ROOT'])
-          publish = Path(os.environ['PUBLISH_ROOT'])
-          for root in (artifact, site):
-              if root.is_symlink() or any(path.is_symlink() for path in root.rglob('*')):
-                  raise RuntimeError('Build outputs and saved site must not contain symbolic links')
-          target = site / folder
-          assembled = publish / folder
-          host = artifact / 'host'
-          if host.is_dir():
-              shutil.copytree(host, assembled)
-              if (target / 'remotes').is_dir():
-                  shutil.copytree(target / 'remotes', assembled / 'remotes')
-          elif (target / 'index.html').is_file():
-              shutil.copytree(target, assembled)
-          else:
-              raise RuntimeError('No deployed host for this environment. Deploy a full host + mfe1 + mfe2 build first.')
-          for remote in ('mfe1', 'mfe2'):
-              source = artifact / remote
-              destination = assembled / 'remotes' / remote
-              if source.is_dir():
-                  if destination.exists():
-                      shutil.rmtree(destination)
-                  shutil.copytree(source, destination)
-              if not (destination / 'remoteEntry.json').is_file():
-                  raise RuntimeError(f'Missing {remote}. Deploy a full host + mfe1 + mfe2 build first.')
-          index = (assembled / 'index.html').read_text()
-          if '<base href="./">' not in index:
-              raise RuntimeError('Host must be built with --base-href ./')
-          for route in ('mfe1', 'mfe2'):
-              (assembled / route).mkdir(exist_ok=True)
-              (assembled / route / 'index.html').write_text(index.replace('<base href="./">', '<base href="../">'))
-          import json
-          manifest = {remote: f'./remotes/{remote}/remoteEntry.json' for remote in ('mfe1', 'mfe2')}
-          (assembled / 'federation.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-          if target.exists():
-              shutil.rmtree(target)
-          shutil.copytree(assembled, target)
-          for name in folders.values():
-              existing = site / name
-              if name != folder and existing.is_dir():
-                  shutil.copytree(existing, publish / name)
-          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Updated applications: {", ".join(sorted(path.name for path in artifact.iterdir() if path.is_dir()))}')
-          print(f'Deploying to /{folder}/; unchanged applications preserved from this environment')
-          PYTHON
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload complete Pages site
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ${{ runner.temp }}/pages-site
-
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Save deployed folders for the next manual run
-        working-directory: deployment-state
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for folder in cit dev sit qa production; do
-            if [[ -d "$folder" ]]; then
-              git add -- "$folder"
-            fi
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
-            git push origin HEAD:gh-pages
-          fi
-
-      - name: Report deployed URL
-        env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          folder="${SELECTED_ENVIRONMENT,,}"
-          if [[ "$folder" == "prod" ]]; then folder="production"; fi
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-prod:
-    name: Deploy PROD to GitHub Pages
-    needs: publish-artifact
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Retain the complete site on the gh-pages state branch.
-      pages: write
-      id-token: write
-    # Scope concurrency to this run, so earlier runs cannot block this deployment.
-    concurrency:
-      group: github-pages-prod-${{ github.run_id }}
-      cancel-in-progress: false
-    # IMPORTANT: Enable Required reviewers for PROD in GitHub Settings > Environments before using this job.
-    environment:
-      name: PROD
-      url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      SELECTED_ENVIRONMENT: PROD
-    steps:
-      - name: Resolve saved Pages site
-        id: source
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const repo = context.repo;
-            try {
-              await github.rest.repos.getBranch({ ...repo, branch: 'gh-pages' });
-              core.setOutput('state-ref', 'gh-pages');
-              core.setOutput('has-state', 'true');
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              core.setOutput('state-ref', context.payload.repository.default_branch);
-              core.setOutput('has-state', 'false');
-            }
-
-      - name: Download validated artifact from this PR run
-        uses: actions/download-artifact@v4
-        with:
-          name: angular-pr-build
-          path: pr-build
-
-      - name: Checkout saved Pages site
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.source.outputs.state-ref }}
-          path: deployment-state
-
-      - name: Initialize site state on first deployment
-        if: steps.source.outputs.has-state == 'false'
-        working-directory: deployment-state
-        run: git switch --orphan gh-pages
-
-      - name: Update selected folder and preserve the other environments
-        env:
-          SITE_ROOT: ${{ github.workspace }}/deployment-state
-          ARTIFACT_ROOT: ${{ github.workspace }}/pr-build
-          PUBLISH_ROOT: ${{ runner.temp }}/pages-site
-        run: |
-          python3 - <<'PYTHON'
-          import os
-          import shutil
-          from pathlib import Path
-
-          folders = dict(CIT='cit', DEV='dev', SIT='sit', QA='qa', PROD='production') # environments
-          folder = folders[os.environ['SELECTED_ENVIRONMENT']]
-          site = Path(os.environ['SITE_ROOT'])
-          artifact = Path(os.environ['ARTIFACT_ROOT'])
-          publish = Path(os.environ['PUBLISH_ROOT'])
-          for root in (artifact, site):
-              if root.is_symlink() or any(path.is_symlink() for path in root.rglob('*')):
-                  raise RuntimeError('Build outputs and saved site must not contain symbolic links')
-          target = site / folder
-          assembled = publish / folder
-          host = artifact / 'host'
-          if host.is_dir():
-              shutil.copytree(host, assembled)
-              if (target / 'remotes').is_dir():
-                  shutil.copytree(target / 'remotes', assembled / 'remotes')
-          elif (target / 'index.html').is_file():
-              shutil.copytree(target, assembled)
-          else:
-              raise RuntimeError('No deployed host for this environment. Deploy a full host + mfe1 + mfe2 build first.')
-          for remote in ('mfe1', 'mfe2'):
-              source = artifact / remote
-              destination = assembled / 'remotes' / remote
-              if source.is_dir():
-                  if destination.exists():
-                      shutil.rmtree(destination)
-                  shutil.copytree(source, destination)
-              if not (destination / 'remoteEntry.json').is_file():
-                  raise RuntimeError(f'Missing {remote}. Deploy a full host + mfe1 + mfe2 build first.')
-          index = (assembled / 'index.html').read_text()
-          if '<base href="./">' not in index:
-              raise RuntimeError('Host must be built with --base-href ./')
-          for route in ('mfe1', 'mfe2'):
-              (assembled / route).mkdir(exist_ok=True)
-              (assembled / route / 'index.html').write_text(index.replace('<base href="./">', '<base href="../">'))
-          import json
-          manifest = {remote: f'./remotes/{remote}/remoteEntry.json' for remote in ('mfe1', 'mfe2')}
-          (assembled / 'federation.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-          if target.exists():
-              shutil.rmtree(target)
-          shutil.copytree(assembled, target)
-          for name in folders.values():
-              existing = site / name
-              if name != folder and existing.is_dir():
-                  shutil.copytree(existing, publish / name)
-          print(f'Selected Environment: {os.environ["SELECTED_ENVIRONMENT"]}')
-          print(f'Updated applications: {", ".join(sorted(path.name for path in artifact.iterdir() if path.is_dir()))}')
-          print(f'Deploying to /{folder}/; unchanged applications preserved from this environment')
-          PYTHON
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload complete Pages site
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ${{ runner.temp }}/pages-site
-
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Save deployed folders for the next manual run
-        working-directory: deployment-state
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for folder in cit dev sit qa production; do
-            if [[ -d "$folder" ]]; then
-              git add -- "$folder"
-            fi
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m "Update Pages environment: $SELECTED_ENVIRONMENT"
-            git push origin HEAD:gh-pages
-          fi
-
-      - name: Report deployed URL
-        env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          folder="${SELECTED_ENVIRONMENT,,}"
-          if [[ "$folder" == "prod" ]]; then folder="production"; fi
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/"
-          echo "Deployed URL: ${PAGE_URL%/}/$folder/" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          test -s dist/angular-github-actions/browser/index.html
+          test -s dist/apps/mfe1/browser/remoteEntry.json
+          test -s dist/apps/mfe2/browser/remoteEntry.json
