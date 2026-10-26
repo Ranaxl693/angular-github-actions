@@ -160,3 +160,32 @@ jobs:
           test -s dist/angular-github-actions/browser/index.html
           test -s dist/apps/mfe1/browser/remoteEntry.json
           test -s dist/apps/mfe2/browser/remoteEntry.json
+
+      - name: Package host and remotes for Pages
+        run: node tools/package-pages.mjs
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload complete site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/angular-github-actions/browser
+
+  deploy-pages:
+    name: Deploy host and MFEs to GitHub Pages
+    needs: verify-remote-cache
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy complete site
+        id: deployment
+        uses: actions/deploy-pages@v4
