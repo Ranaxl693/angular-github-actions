@@ -13,7 +13,13 @@ export function federationConfig(name, exposes) {
       strictVersion: true,
       requiredVersion: 'auto',
       build: 'package',
-    }).patch(['@angular/core'], { includeSecondaries: { keepAll: true } }),
+    })
+      .patch(['@angular/core'], { includeSecondaries: { keepAll: true } })
+      // Auth imports live inside the shared core mapping. Keep MSAL shared even
+      // when an application's own source does not directly import the packages.
+      .patch(['@azure/msal-angular', '@azure/msal-browser'], {
+        includeSecondaries: { keepAll: true },
+      }),
     sharedMappings: mappingsFromWorkspace({
       singleton: true,
       strictVersion: true,

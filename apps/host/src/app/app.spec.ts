@@ -2,12 +2,20 @@ import { TestBed } from '@angular/core/testing';
 import { App } from './app';
 import { provideRouter } from '@angular/router';
 import { environment } from '../environments/environment';
+import { signal } from '@angular/core';
+import { AuthService } from './auth/auth-service';
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter([])],
+      providers: [
+        provideRouter([]),
+        {
+          provide: AuthService,
+          useValue: { account: signal(null), busy: signal(false), error: signal(null) },
+        },
+      ],
     }).compileComponents();
   });
 

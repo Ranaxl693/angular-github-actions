@@ -26,6 +26,23 @@ module.exports = tseslint.config(
     },
   },
   {
+    files: ['apps/mfe*/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@azure/msal-*', '**/host/**'],
+              message:
+                'Only the host owns authentication. Read user information through AUTH_SESSION from @workspace/lib-core.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.html'],
     extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility],
   },

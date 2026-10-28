@@ -3,6 +3,15 @@
     <p class="eyebrow">Angular 22 · Nx monorepo · Native Federation Yo</p>
     <h1>Hello, {{ title() }}</h1>
     <p data-testid="environment-name">Environment: {{ environmentName }}</p>
+    @if (auth.account(); as account) {
+      <p>Signed in as {{ account.name ?? account.username }}</p>
+      <button type="button" [disabled]="auth.busy()" (click)="auth.signOut()">Sign out</button>
+    } @else {
+      <button type="button" [disabled]="auth.busy()" (click)="auth.signIn()">Sign in</button>
+    }
+    @if (auth.error(); as error) {
+      <p role="alert">{{ error }}</p>
+    }
     <nav aria-label="Micro frontends">
       <a routerLink="/" [routerLinkActiveOptions]="{ exact: true }" routerLinkActive="active"
         >Home</a

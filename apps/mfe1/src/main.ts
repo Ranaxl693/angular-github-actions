@@ -1,5 +1,4 @@
-import { initFederation } from '@angular-architects/native-federation';
+import { shellHomeUrl } from '../../../tools/shell-home-url';
 
-initFederation()
-  .then(() => import('./bootstrap'))
-  .catch((error: unknown) => console.error('Federation bootstrap failed', error));
+// The host loads ./Component directly; this entry runs only for standalone visits.
+window.location.replace(shellHomeUrl(document.baseURI));

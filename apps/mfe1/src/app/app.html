@@ -1,4 +1,7 @@
 <app-ui-card title="MFE 1 · Products">
+  @if (session.user(); as user) {
+    <p>Welcome, {{ user.name }}!</p>
+  }
   <p>This product list is loaded from the mfe1 remote. Yo</p>
   <ul>
     @for (product of products; track product) {
