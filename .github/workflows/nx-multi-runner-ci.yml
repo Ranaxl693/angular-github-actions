@@ -132,6 +132,40 @@ jobs:
         run: |
           set -euo pipefail
           npm run --silent build:affected
+      - name: Package affected application builds
+        id: package
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+          
+          affected = json.loads((Path(os.environ['RUNNER_TEMP']) / 'affected-projects.json').read_text())
+          if not isinstance(affected, list) or not all(isinstance(name, str) for name in affected):
+              raise RuntimeError('Expected affected projects to be a JSON array of names')
+          outputs = {
+              'host': Path('dist/angular-github-actions/browser'),
+              'mfe1': Path('dist/apps/mfe1/browser'),
+              'mfe2': Path('dist/apps/mfe2/browser'),
+          }
+          apps = [name for name in outputs if name in affected]
+          staging = Path('dist/affected-pages')
+          if staging.exists():
+              shutil.rmtree(staging)
+          for app in apps:
+              source = outputs[app]
+              required = 'index.html' if app == 'host' else 'remoteEntry.json'
+              if not (source / required).is_file():
+                  raise RuntimeError(f'Missing build output for affected app {app}: {source / required}')
+              if source.is_symlink() or any(path.is_symlink() for path in source.rglob('*')):
+                  raise RuntimeError(f'Build output must not contain symbolic links: {app}')
+              shutil.copytree(source, staging / app)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'has-apps={str(bool(apps)).lower()}\n')
+          print(f'Packaged affected apps: {", ".join(apps) if apps else "none"}')
+          PYTHON
       - name: Upload staged build
         if: steps.package.outputs.has-apps == 'true'
         uses: actions/upload-artifact@v4
