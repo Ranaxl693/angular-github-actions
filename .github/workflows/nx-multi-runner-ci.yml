@@ -24,6 +24,15 @@ jobs:
     env:
       NX_DAEMON: 'false'
     steps:
+      - name: Verify Nx Cloud secret is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${NX_CLOUD_ACCESS_TOKEN:-}" ]]; then
+            echo "::error::Add NX_CLOUD_ACCESS_TOKEN in repository Actions secrets."
+            exit 1
+          fi
+          echo "Nx Cloud access token is available from Actions secrets."
       - name: Checkout full history
         uses: actions/checkout@v4
         with:
