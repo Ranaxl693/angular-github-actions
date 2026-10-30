@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "angular-cli": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "--no-install",
+        "ng",
+        "mcp"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}
