@@ -1,6 +1,5 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import type { HttpInterceptorFn } from '@angular/common/http';
-import { authInterceptor } from './auth.interceptor';
 import { requestIdInterceptor } from './request-id.interceptor';
 import { httpLoggingInterceptor } from './http-logging.interceptor';
 import { httpErrorInterceptor } from './http-error.interceptor';
@@ -13,7 +12,6 @@ import { httpErrorInterceptor } from './http-error.interceptor';
 export function provideCoreHttp(additionalInterceptors: HttpInterceptorFn[] = []) {
   return provideHttpClient(
     withInterceptors([
-      authInterceptor,
       requestIdInterceptor,
       httpLoggingInterceptor,
       httpErrorInterceptor,
