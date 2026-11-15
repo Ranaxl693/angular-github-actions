@@ -1,7 +1,8 @@
 import { Component, inject, signal } from '@angular/core';
 import { WorkspaceState } from '@workspace/lib-core';
 import { Card } from '@workspace/lib-ui';
-import { JsonPlaceholderPost, JsonPlaceholderService } from './json-placeholder.service';
+import { JsonPlaceholderService } from './json-placeholder.service';
+import type { JsonPlaceholderPost } from './json-placeholder.service';
 
 @Component({
   selector: 'app-mfe1',
