@@ -1,13 +1,15 @@
-import { HttpInterceptorFn } from '@angular/common/http';
+import type { HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
 import { finalize } from 'rxjs';
+import { HttpDiagnosticsService } from './http-diagnostics.service';
 
-/** Log method and duration without URLs, tokens, or request/response bodies. */
-export const httpLoggingInterceptor: HttpInterceptorFn = (req, next) => {
-  const started = Date.now();
-  return next(req).pipe(
-    finalize(() => console.debug('HTTP completed', {
-      method: req.method,
-      durationMs: Date.now() - started,
-    })),
+/** Log request duration through a shared injectable diagnostics service. */
+export const httpLoggingInterceptor: HttpInterceptorFn = (request, next) => {
+  const diagnostics = inject(HttpDiagnosticsService);
+  if (!diagnostics.enabled) return next(request);
+
+  const started = performance.now();
+  return next(request).pipe(
+    finalize(() => diagnostics.completed(request.method, performance.now() - started)),
   );
 };
