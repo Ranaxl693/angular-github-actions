@@ -50,7 +50,9 @@ describe('loadingInterceptor', () => {
   it('stops tracking when the request is cancelled', () => {
     const subscription = http.get('/api/slow').subscribe();
     expect(loading.isLoading()).toBe(true);
+    const request = controller.expectOne('/api/slow');
     subscription.unsubscribe();
+    expect(request.cancelled).toBe(true);
     expect(loading.activeCount()).toBe(0);
   });
 
