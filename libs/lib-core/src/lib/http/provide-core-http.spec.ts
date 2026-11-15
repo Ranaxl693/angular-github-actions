@@ -3,6 +3,7 @@ import type { HttpInterceptorFn } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideCoreHttp } from './provide-core-http';
+import { ACCESS_TOKEN_RESOLVER, PROTECTED_API_URLS } from './auth.interceptor';
 
 describe('provideCoreHttp', () => {
   it('registers HttpClient and applies the shared request interceptor', () => {
@@ -43,6 +44,28 @@ describe('provideCoreHttp', () => {
     expect(request.request.headers.get('X-Request-Source')).toBe('angular-mfe');
     expect(request.request.headers.get('X-MFE')).toBe('mfe1');
     request.flush({});
+    controller.verify();
+  });
+  it('attaches a resolved token only to explicitly protected API routes', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideCoreHttp(),
+        provideHttpClientTesting(),
+        { provide: PROTECTED_API_URLS, useValue: ['https://api.example.com/private'] },
+        { provide: ACCESS_TOKEN_RESOLVER, useValue: async () => 'demo-token' },
+      ],
+    });
+    const client = TestBed.inject(HttpClient);
+    const controller = TestBed.inject(HttpTestingController);
+    client.get('https://api.example.com/private/items').subscribe();
+    client.get('https://jsonplaceholder.typicode.com/posts').subscribe();
+    await Promise.resolve();
+    const privateRequest = controller.expectOne('https://api.example.com/private/items');
+    expect(privateRequest.request.headers.get('Authorization')).toBe('Bearer demo-token');
+    const publicRequest = controller.expectOne('https://jsonplaceholder.typicode.com/posts');
+    expect(publicRequest.request.headers.has('Authorization')).toBe(false);
+    privateRequest.flush({});
+    publicRequest.flush({});
     controller.verify();
   });
 });
