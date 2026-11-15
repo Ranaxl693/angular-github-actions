@@ -3,6 +3,7 @@ import type { HttpInterceptorFn } from '@angular/common/http';
 import { requestHeadersInterceptor } from './request-headers.interceptor';
 import { httpLoggingInterceptor } from './http-logging.interceptor';
 import { httpErrorInterceptor } from './http-error.interceptor';
+import { loadingInterceptor } from './loading.interceptor';
 
 /**
  * Shared HTTP configuration for independently bootstrapped Angular applications.
@@ -15,6 +16,7 @@ export function provideCoreHttp(additionalInterceptors: HttpInterceptorFn[] = []
       requestHeadersInterceptor,
       httpLoggingInterceptor,
       httpErrorInterceptor,
+      loadingInterceptor,
       ...additionalInterceptors,
     ]),
   );
