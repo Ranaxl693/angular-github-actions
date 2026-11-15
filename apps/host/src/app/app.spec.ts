@@ -1,9 +1,25 @@
+import { provideApi } from '@workspace/lib-core';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { App } from './app';
 import { provideRouter } from '@angular/router';
 import { environment } from '../environments/environment';
 
 describe('App', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideApi({ baseUrl: 'https://jsonplaceholder.typicode.com' }),
+        provideHttpClientTesting(),
+      ],
+    });
+  });
+  afterEach(() => {
+    const http = TestBed.inject(HttpTestingController);
+    for (const request of http.match('https://jsonplaceholder.typicode.com/posts'))
+      request.flush([]);
+    http.verify();
+  });
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],

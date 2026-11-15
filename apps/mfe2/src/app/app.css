@@ -1,0 +1,47 @@
+:host {
+  display: grid;
+  gap: 1rem;
+}
+
+.posts {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.posts li + li {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #dbe3ed;
+}
+
+h3 {
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.post-meta {
+  color: #526077;
+  font-size: 0.875rem;
+}
+
+.post-body {
+  white-space: pre-line;
+}
+
+.post-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.post-form label {
+  display: grid;
+  gap: 0.25rem;
+}
+.post-form input,
+.post-form textarea {
+  font: inherit;
+  padding: 0.5rem;
+}
+.post-form textarea {
+  min-height: 5rem;
+}

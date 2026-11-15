@@ -13,7 +13,7 @@ export function federationConfig(name, exposes) {
       strictVersion: true,
       requiredVersion: 'auto',
       build: 'package',
-    }).patch(['@angular/core'], { includeSecondaries: { keepAll: true } }),
+    }).patch(['@angular/core', '@angular/common'], { includeSecondaries: { keepAll: true } }),
     sharedMappings: mappingsFromWorkspace({
       singleton: true,
       strictVersion: true,

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "nx run-many -t serve --projects=host,mfe1,mfe2 --parallel=3 --outputStyle=static",
+    "start": "nx run-many -t serve --projects=host,mfe1,mfe2 --parallel=3 --outputStyle=stream",
     "build": "nx run-many -t build --projects=host,mfe1,mfe2 --outputStyle=static",
     "watch": "ng build host --configuration development --watch",
     "typecheck": "nx run-many -t typecheck --all --outputStyle=static",

@@ -180,3 +180,64 @@ its other applications from the existing `gh-pages` site. Host updates recreate
 the clean-route entry pages and relative federation manifest. A new environment
 needs a complete host + mfe1 + mfe2 deployment first; an incomplete first deployment
 fails instead of publishing a broken site.
+
+### Shared HTTP client
+
+All applications configure `provideApi({ baseUrl: environment.apiBaseUrl })` at bootstrap.
+The host and both standalone MFEs currently use `https://jsonplaceholder.typicode.com`
+for their GET posts and POST create demos. Created posts are displayed locally;
+JSONPlaceholder does not persist writes. A relative `/api` URL requires a backend/reverse
+proxy on that origin. Set the environment's
+`apiBaseUrl` to your backend HTTPS URL for deployments such as GitHub Pages, and configure
+backend CORS when using a different origin. No backend or authentication contract is assumed.
+
+Use the shared public entry point from any MFE or domain data-access library:
+
+```ts
+import { Injectable, inject } from '@angular/core';
+import { ApiClient } from '@workspace/lib-core';
+
+interface Product {
+  id: number;
+  name: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class ProductsApi {
+  private readonly api = inject(ApiClient);
+
+  list() {
+    return this.api.get<Product[]>('/products', { params: { page: 1 } });
+  }
+
+  create(request: { name: string }) {
+    return this.api.post<Product>('/products', request);
+  }
+}
+```
+
+`ApiClient` supports typed JSON GET, POST, PUT, PATCH and DELETE responses. Requests
+return cold Observables: subscribe, use the async pipe, or compose them in a feature
+service to execute them. Request options support headers, query parameters, context
+and credentials. Use Angular `HttpClient` directly for files, progress events or full
+responses. Response type parameters provide compile-time typing, not runtime validation.
+Errors reach the caller unchanged; requests are not automatically retried or cached.
+
+Pass functional interceptors as the second argument to `provideApi(config, interceptors)`.
+Configure authentication once the backend contract is known; restrict credentials to
+approved API destinations. Keep loading state, form errors and notifications in features.
+
+The host loads exposed remote components, so hosted MFEs inherit the host's API
+configuration. A remote's own `app.config.ts` runs only during standalone bootstrap.
+Standalone MFE URLs are configured in their respective `src/environments/environment.ts`;
+the host uses its existing environment replacements. Do not re-provide `ApiClient` in
+components or expect remote bootstrap configuration to override the host.
+
+Native Federation shares `@workspace/lib-core` through the existing singleton
+`sharedMappings`; import it using that alias, without deep/relative library imports.
+`@angular/common` secondary entry points are explicitly included, covering
+`@angular/common/http`. No additional remote `exposes` entry is needed. Federation
+shares module identity; Angular injectors determine service instance scope. Independently
+bootstrapped applications have independent root instances. Changes to the shared library
+must remain compatible across deployed hosts and remotes; the mapping's current fixed
+version is not an automatic compatibility check for API changes.

@@ -9,3 +9,42 @@
     Selected items: <strong>{{ workspace.selectedCount() }}</strong>
   </p>
 </app-ui-card>
+
+<app-ui-card title="JSONPlaceholder posts">
+  <form #postForm="ngForm" (ngSubmit)="createPost()" class="post-form">
+    <label>Title <input name="postTitle" [(ngModel)]="draftTitle" required /></label>
+    <label>Body <textarea name="postBody" [(ngModel)]="draftBody" required></textarea></label>
+    <button type="submit" [disabled]="postForm.invalid || saving() || loading()">
+      {{ saving() ? 'Creating…' : 'Create post' }}
+    </button>
+  </form>
+  <p>Demo API: created posts are shown locally and are not persisted on the server.</p>
+  @if (saveError()) {
+    <p role="alert">{{ saveError() }}</p>
+  }
+  @if (saved()) {
+    <p role="status">Post created successfully.</p>
+  }
+  @if (loading()) {
+    <p role="status">Loading posts…</p>
+  } @else if (error()) {
+    <p role="alert">{{ error() }}</p>
+  } @else {
+    <p>{{ posts().length }} posts</p>
+    <ol class="posts">
+      @for (post of posts(); track post.id) {
+        <li data-testid="post">
+          <article>
+            <h3>{{ post.title }}</h3>
+            <p class="post-meta">Post {{ post.id }} · User {{ post.userId }}</p>
+            <p class="post-body">{{ post.body }}</p>
+          </article>
+        </li>
+      } @empty {
+        <li>No posts found.</li>
+      }
+    </ol>
+  }
+</app-ui-card>
+
+<app-posts-preview />
