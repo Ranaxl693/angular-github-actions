@@ -3,6 +3,7 @@ import type { HttpInterceptorFn } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideCoreHttp } from './provide-core-http';
+import { COMMON_REQUEST_HEADERS } from './request-headers.interceptor';
 
 describe('provideCoreHttp', () => {
   it('registers HttpClient and applies the shared request interceptor', () => {
@@ -42,6 +43,21 @@ describe('provideCoreHttp', () => {
     const request = controller.expectOne('/api/example');
     expect(request.request.headers.get('X-Request-Source')).toBe('angular-mfe');
     expect(request.request.headers.get('X-MFE')).toBe('mfe1');
+    request.flush({});
+    controller.verify();
+  });
+  it('supports custom headers supplied through the shared configuration', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideCoreHttp(),
+        provideHttpClientTesting(),
+        { provide: COMMON_REQUEST_HEADERS, useValue: { 'X-Client': 'provider-web' } },
+      ],
+    });
+    TestBed.inject(HttpClient).get('/api/configured').subscribe();
+    const controller = TestBed.inject(HttpTestingController);
+    const request = controller.expectOne('/api/configured');
+    expect(request.request.headers.get('X-Client')).toBe('provider-web');
     request.flush({});
     controller.verify();
   });
