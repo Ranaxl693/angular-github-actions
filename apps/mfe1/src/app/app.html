@@ -5,7 +5,19 @@
       <li>{{ product }} <button type="button" (click)="workspace.addItem()">Add item</button></li>
     }
   </ul>
-  <p>
-    Selected items: <strong>{{ workspace.selectedCount() }}</strong>
-  </p>
+  <p>Selected items: <strong>{{ workspace.selectedCount() }}</strong></p>
+
+  <h3>HTTP demo · JSONPlaceholder</h3>
+  <p>Requests use Angular HttpClient directly from MFE1. Shared interceptors come from lib-core.</p>
+  <button type="button" (click)="loadPosts()" [disabled]="loadingPosts()">
+    {{ loadingPosts() ? 'Loading…' : 'Load sample posts' }}
+  </button>
+  @if (postsError()) {
+    <p role="alert">{{ postsError() }}</p>
+  }
+  <ul>
+    @for (post of posts(); track post.id) {
+      <li>{{ post.title }}</li>
+    }
+  </ul>
 </app-ui-card>
