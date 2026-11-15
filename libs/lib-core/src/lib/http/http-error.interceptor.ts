@@ -1,17 +1,16 @@
-import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse } from '@angular/common/http';
+import type { HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
+import { HttpDiagnosticsService } from './http-diagnostics.service';
 
-/**
- * Central place for HTTP error policy. Preserve the original error so each
- * MFE can handle domain-specific failures without losing status or payload.
- */
-export const httpErrorInterceptor: HttpInterceptorFn = (request, next) =>
-  next(request).pipe(
+/** Preserve original HTTP errors for MFE-specific handling. */
+export const httpErrorInterceptor: HttpInterceptorFn = (request, next) => {
+  const diagnostics = inject(HttpDiagnosticsService);
+  return next(request).pipe(
     catchError((error: unknown) => {
-      if (error instanceof HttpErrorResponse) {
-        // Avoid logging request URLs, tokens, or response bodies.
-        console.warn('HTTP request failed', { status: error.status });
-      }
+      if (error instanceof HttpErrorResponse) diagnostics.failed(error.status);
       return throwError(() => error);
     }),
   );
+};
