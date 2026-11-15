@@ -1,63 +1,93 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import type { HttpInterceptorFn } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideCoreHttp } from './provide-core-http';
-import { COMMON_REQUEST_HEADERS } from './request-headers.interceptor';
+import { REQUEST_CUSTOM_HEADERS } from './request-headers.interceptor';
 
 describe('provideCoreHttp', () => {
-  it('registers HttpClient and applies the shared request interceptor', () => {
+  let http: HttpClient;
+  let controller: HttpTestingController;
+
+  beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [provideCoreHttp(), provideHttpClientTesting()],
     });
-    const http = TestBed.inject(HttpClient);
-    const controller = TestBed.inject(HttpTestingController);
-    let result: { ok: boolean } | undefined;
-    http.get<{ ok: boolean }>('/api/check').subscribe((response) => { result = response; });
-    const request = controller.expectOne('/api/check');
-    expect(request.request.headers.get('X-Request-Source')).toBe('angular-mfe');
-    request.flush({ ok: true });
-    expect(result).toEqual({ ok: true });
-    controller.verify();
+    http = TestBed.inject(HttpClient);
+    controller = TestBed.inject(HttpTestingController);
   });
 
-  it('does not attach custom headers to third-party requests', () => {
-    TestBed.configureTestingModule({
-      providers: [provideCoreHttp(), provideHttpClientTesting()],
-    });
-    TestBed.inject(HttpClient).get('https://jsonplaceholder.typicode.com/posts').subscribe();
-    const controller = TestBed.inject(HttpTestingController);
-    const request = controller.expectOne('https://jsonplaceholder.typicode.com/posts');
+  afterEach(() => controller.verify());
+
+  it('leaves ordinary requests unchanged without an explicit context', () => {
+    let result: { ok: boolean } | undefined;
+    http.get<{ ok: boolean }>('/api/check').subscribe(response => { result = response; });
+    const request = controller.expectOne('/api/check');
     expect(request.request.headers.has('X-Request-Source')).toBe(false);
-    request.flush([]);
-    controller.verify();
+    expect(request.request.headers.has('X-MFE')).toBe(false);
+    request.flush({ ok: true });
+    expect(result).toEqual({ ok: true });
   });
-  it('runs an optional application interceptor alongside common interceptors', () => {
-    const mfeInterceptor: HttpInterceptorFn = (req, next) =>
-      next(req.clone({ setHeaders: { 'X-MFE': 'mfe1' } }));
+
+  it('adds selected custom headers to only the opted-in API call', () => {
+    http.get('/api/mfe1/selected', {
+      context: new HttpContext().set(REQUEST_CUSTOM_HEADERS, {
+        'X-MFE': 'mfe1',
+        'X-Feature': 'special',
+      }),
+    }).subscribe();
+    http.get('/api/mfe1/ordinary').subscribe();
+    http.get('/api/mfe2/ordinary').subscribe();
+
+    const selected = controller.expectOne('/api/mfe1/selected');
+    expect(selected.request.headers.get('X-MFE')).toBe('mfe1');
+    expect(selected.request.headers.get('X-Feature')).toBe('special');
+
+    for (const url of ['/api/mfe1/ordinary', '/api/mfe2/ordinary']) {
+      const request = controller.expectOne(url);
+      expect(request.request.headers.has('X-MFE')).toBe(false);
+      expect(request.request.headers.has('X-Feature')).toBe(false);
+      request.flush({});
+    }
+    selected.flush({});
+  });
+
+  it('preserves explicit request headers when context specifies the same name', () => {
+    http.get('/api/priority', {
+      headers: { 'X-MFE': 'caller' },
+      context: new HttpContext().set(REQUEST_CUSTOM_HEADERS, { 'X-MFE': 'default' }),
+    }).subscribe();
+    const request = controller.expectOne('/api/priority');
+    expect(request.request.headers.get('X-MFE')).toBe('caller');
+    request.flush({});
+  });
+
+  it('also supports explicitly selected external APIs without changing unrelated ones', () => {
+    http.get('https://example.com/selected', {
+      context: new HttpContext().set(REQUEST_CUSTOM_HEADERS, { 'X-Feature': 'selected' }),
+    }).subscribe();
+    http.get('https://example.com/other').subscribe();
+    const selected = controller.expectOne('https://example.com/selected');
+    expect(selected.request.headers.get('X-Feature')).toBe('selected');
+    selected.flush({});
+    const other = controller.expectOne('https://example.com/other');
+    expect(other.request.headers.has('X-Feature')).toBe(false);
+    other.flush({});
+  });
+});
+
+describe('provideCoreHttp additional interceptors', () => {
+  it('runs an optional MFE-specific interceptor', () => {
+    const mfeInterceptor: HttpInterceptorFn = (request, next) =>
+      next(request.clone({ setHeaders: { 'X-MFE': 'mfe1' } }));
     TestBed.configureTestingModule({
       providers: [provideCoreHttp([mfeInterceptor]), provideHttpClientTesting()],
     });
-    TestBed.inject(HttpClient).get('/api/example').subscribe();
+    const http = TestBed.inject(HttpClient);
     const controller = TestBed.inject(HttpTestingController);
+    http.get('/api/example').subscribe();
     const request = controller.expectOne('/api/example');
-    expect(request.request.headers.get('X-Request-Source')).toBe('angular-mfe');
     expect(request.request.headers.get('X-MFE')).toBe('mfe1');
-    request.flush({});
-    controller.verify();
-  });
-  it('supports custom headers supplied through the shared configuration', () => {
-    TestBed.configureTestingModule({
-      providers: [
-        provideCoreHttp(),
-        provideHttpClientTesting(),
-        { provide: COMMON_REQUEST_HEADERS, useValue: { 'X-Client': 'provider-web' } },
-      ],
-    });
-    TestBed.inject(HttpClient).get('/api/configured').subscribe();
-    const controller = TestBed.inject(HttpTestingController);
-    const request = controller.expectOne('/api/configured');
-    expect(request.request.headers.get('X-Client')).toBe('provider-web');
     request.flush({});
     controller.verify();
   });
