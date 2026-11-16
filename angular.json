@@ -31,9 +31,13 @@
                 "input": "apps/host/public"
               }
             ],
-            "styles": ["apps/host/src/styles.css"],
+            "styles": [
+              "apps/host/src/styles.css"
+            ],
             "outputPath": "dist/angular-github-actions",
-            "polyfills": ["es-module-shims"]
+            "polyfills": [
+              "es-module-shims"
+            ]
           },
           "configurations": {
             "production": {
@@ -195,8 +199,12 @@
                 "input": "apps/mfe1/public"
               }
             ],
-            "styles": ["apps/mfe1/src/styles.css"],
-            "polyfills": ["es-module-shims"],
+            "styles": [
+              "apps/mfe1/src/styles.css"
+            ],
+            "polyfills": [
+              "es-module-shims"
+            ],
             "outputPath": "dist/apps/mfe1"
           },
           "configurations": {
@@ -313,8 +321,12 @@
                 "input": "apps/mfe2/public"
               }
             ],
-            "styles": ["apps/mfe2/src/styles.css"],
-            "polyfills": ["es-module-shims"],
+            "styles": [
+              "apps/mfe2/src/styles.css"
+            ],
+            "polyfills": [
+              "es-module-shims"
+            ],
             "outputPath": "dist/apps/mfe2"
           },
           "configurations": {
@@ -430,6 +442,27 @@
           "options": {
             "buildTarget": "host:esbuild:development",
             "tsConfig": "libs/lib-ui/tsconfig.spec.json"
+          }
+        }
+      }
+    },
+    "lib-state": {
+      "projectType": "library",
+      "root": "libs/lib-state",
+      "sourceRoot": "libs/lib-state/src",
+      "prefix": "app",
+      "architect": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "lib-state:build",
+            "tsConfig": "libs/lib-state/tsconfig.spec.json"
+          }
+        },
+        "build": {
+          "builder": "@angular/build:ng-packagr",
+          "options": {
+            "project": "libs/lib-state/ng-package.json"
           }
         }
       }
