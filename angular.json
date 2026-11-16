@@ -450,19 +450,12 @@
       "projectType": "library",
       "root": "libs/lib-state",
       "sourceRoot": "libs/lib-state/src",
-      "prefix": "app",
       "architect": {
         "test": {
           "builder": "@angular/build:unit-test",
           "options": {
-            "buildTarget": "lib-state:build",
+            "buildTarget": "host:esbuild:development",
             "tsConfig": "libs/lib-state/tsconfig.spec.json"
-          }
-        },
-        "build": {
-          "builder": "@angular/build:ng-packagr",
-          "options": {
-            "project": "libs/lib-state/ng-package.json"
           }
         }
       }
