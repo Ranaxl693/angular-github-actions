@@ -1,11 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { Observable, defer, finalize, firstValueFrom, shareReplay } from 'rxjs';
-
-export interface CacheEntry<T> {
-  readonly data: T;
-  readonly loadedAt: number;
-  readonly expiresAt: number;
-}
+import { Observable, defer, finalize, firstValueFrom, of, shareReplay, tap } from 'rxjs';
 
 interface StoredEntry {
   readonly data: unknown;
@@ -13,11 +7,18 @@ interface StoredEntry {
   readonly expiresAt: number;
 }
 
-/** Per-shell, in-memory cache. No browser persistence or sensitive data logging. */
+export interface CacheEntry<T> {
+  readonly data: T;
+  readonly loadedAt: number;
+  readonly expiresAt: number;
+}
+
+/** Reactive in-memory cache, scoped to one Angular root injector. */
 @Injectable({ providedIn: 'root' })
 export class SignalCache {
   private readonly entries = signal<ReadonlyMap<string, StoredEntry>>(new Map());
   private readonly pending = new Map<string, Observable<unknown>>();
+  private readonly generations = new Map<string, number>();
   readonly size = computed(() => this.entries().size);
 
   select<T>(key: string) {
@@ -38,34 +39,38 @@ export class SignalCache {
     }));
   }
 
-  /** Concurrent callers share one network request; failed requests never get cached. */
   load<T>(key: string, factory: () => Observable<T>, ttlMs = 5 * 60_000, force = false): Observable<T> {
     if (!force) {
       const existing = this.peek<T>(key);
-      if (existing !== undefined) return defer(() => Promise.resolve(existing));
+      if (existing !== undefined) return of(existing);
     }
-    const inflight = this.pending.get(key) as Observable<T> | undefined;
-    if (inflight) return inflight;
+    const pending = this.pending.get(key) as Observable<T> | undefined;
+    if (pending) return pending;
+    const generation = this.generations.get(key) ?? 0;
+    // finalize is upstream of shareReplay so only the source completion clears pending.
     const request = defer(factory).pipe(
-      // Multicast to concurrent MFE subscribers without reissuing HTTP.
-      // The subscription starts only when a consumer subscribes.
-      shareReplay({ bufferSize: 1, refCount: true }),
+      tap(data => {
+        // An invalidated/cleared request must not restore old data.
+        if (this.generations.get(key) === generation || (!this.generations.has(key) && generation === 0)) {
+          this.set(key, data, ttlMs);
+        }
+      }),
       finalize(() => {
-        // Clean up after each subscription, provided this is still the active entry.
         if (this.pending.get(key) === request) this.pending.delete(key);
       }),
+      shareReplay({ bufferSize: 1, refCount: true }),
     );
     this.pending.set(key, request);
     return request;
   }
 
-  async getOrLoad<T>(key: string, factory: () => Observable<T>, ttlMs = 5 * 60_000, force = false): Promise<T> {
-    const data = await firstValueFrom(this.load(key, factory, ttlMs, force));
-    this.set(key, data, ttlMs);
-    return data;
+  getOrLoad<T>(key: string, factory: () => Observable<T>, ttlMs = 5 * 60_000, force = false): Promise<T> {
+    return firstValueFrom(this.load(key, factory, ttlMs, force));
   }
 
   invalidate(key: string): void {
+    this.generations.set(key, (this.generations.get(key) ?? 0) + 1);
+    this.pending.delete(key);
     this.entries.update(current => {
       const next = new Map(current);
       next.delete(key);
@@ -74,6 +79,7 @@ export class SignalCache {
   }
 
   clear(): void {
+    for (const key of this.pending.keys()) this.generations.set(key, (this.generations.get(key) ?? 0) + 1);
     this.entries.set(new Map());
     this.pending.clear();
   }
