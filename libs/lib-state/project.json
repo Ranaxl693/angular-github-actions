@@ -1,0 +1,40 @@
+{
+  "name": "lib-state",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "root": "libs/lib-state",
+  "sourceRoot": "libs/lib-state/src",
+  "projectType": "library",
+  "tags": [
+    "type:lib",
+    "scope:state"
+  ],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p libs/lib-state/tsconfig.lib.json"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint \"libs/lib-state/src/**/*.{ts,html}\" --max-warnings=0"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ng test lib-state --watch=false"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ngc -p libs/lib-state/tsconfig.lib.json"
+      },
+      "outputs": [
+        "{workspaceRoot}/dist/libs/lib-state"
+      ]
+    }
+  }
+}
