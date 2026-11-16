@@ -5,7 +5,8 @@
   "compilerOptions": {
     "paths": {
       "@workspace/lib-core": ["./libs/lib-core/src/index.ts"],
-      "@workspace/lib-ui": ["./libs/lib-ui/src/index.ts"]
+      "@workspace/lib-ui": ["./libs/lib-ui/src/index.ts"],
+      "@workspace/lib-state": ["./libs/lib-state/src/index.ts"]
     },
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
@@ -29,6 +30,8 @@
     { "path": "./libs/lib-core/tsconfig.spec.json" },
     { "path": "./libs/lib-ui/tsconfig.lib.json" },
     { "path": "./libs/lib-ui/tsconfig.spec.json" },
+    { "path": "./libs/lib-state/tsconfig.lib.json" },
+    { "path": "./libs/lib-state/tsconfig.spec.json" },
     {
       "path": "./apps/host/tsconfig.app.json"
     },
