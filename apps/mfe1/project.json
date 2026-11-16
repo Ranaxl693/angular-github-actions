@@ -56,5 +56,5 @@
       "continuous": true
     }
   },
-  "implicitDependencies": ["lib-core", "lib-ui"]
+  "implicitDependencies": ["lib-core", "lib-ui", "lib-state"]
 }

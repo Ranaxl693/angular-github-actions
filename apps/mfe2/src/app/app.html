@@ -1,9 +1,24 @@
 <app-ui-card title="MFE 2 · Selection">
-  <p>This selection summary is loaded from the mfe2 remote.</p>
-  <p>Incremental cache test: MFE 2 changed alongside MFE 1.</p>
-  <p>
-    Selected items: <strong data-testid="selection-count">{{ workspace.selectedCount() }}</strong>
-  </p>
+  <p>Selected items: <strong data-testid="selection-count">{{ workspace.selectedCount() }}</strong></p>
   <button type="button" (click)="workspace.clear()">Clear selection</button>
-  <p>Add items in MFE 1, then return here. The count is shared through lib-core.</p>
+
+  <h3>Shared global state from MFE 1</h3>
+  <p>MFE 1 and MFE 2 read from the same root Signal Store in the host.</p>
+  <p>Cached posts: <strong data-testid="mfe2-shared-post-count">{{ postsStore.posts()?.length ?? 0 }}</strong></p>
+  <button type="button" (click)="loadPosts()" [disabled]="postsStore.loading()">
+    {{ postsStore.loading() ? 'Loading…' : 'Load or reuse posts' }}
+  </button>
+  @if (postsStore.error()) {
+    <p role="alert">{{ postsStore.error() }}</p>
+  }
+  <ul>
+    @for (post of postsStore.posts() ?? []; track post.id) {
+      <li>{{ post.title }}</li>
+    }
+  </ul>
+
+  <h3>MFE-only state</h3>
+  <label for="mfe2-filter">Local filter</label>
+  <input id="mfe2-filter" #filterInput [value]="local.filter()" (input)="setLocalFilter(filterInput.value)" />
+  <p>Only in MFE2: {{ local.filter() }}</p>
 </app-ui-card>

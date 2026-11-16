@@ -19,7 +19,7 @@ export function federationConfig(name, exposes) {
       strictVersion: true,
       version: '1.0.0',
       requiredVersion: '1.0.0',
-    }).filter(['@workspace/lib-core', '@workspace/lib-ui']),
+    }).filter(['@workspace/lib-core', '@workspace/lib-ui', '@workspace/lib-state']),
     skip: ['rxjs/ajax', 'rxjs/fetch', 'rxjs/testing', 'rxjs/webSocket'],
     features: { denseChunking: true },
   });
