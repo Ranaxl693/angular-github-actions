@@ -1,5 +1,5 @@
 <app-ui-card title="MFE 1 · Products">
-  <p>This product list is loaded from the mfe1 remote. Yo</p>
+  <p>This product list is loaded from the mfe1 remote.</p>
   <ul>
     @for (product of products; track product) {
       <li>{{ product }} <button type="button" (click)="workspace.addItem()">Add item</button></li>
@@ -7,17 +7,24 @@
   </ul>
   <p>Selected items: <strong>{{ workspace.selectedCount() }}</strong></p>
 
-  <h3>HTTP demo · JSONPlaceholder</h3>
-  <p>Requests use Angular HttpClient directly from MFE1. Shared interceptors come from lib-core.</p>
-  <button type="button" (click)="loadPosts()" [disabled]="loadingPosts()">
-    {{ loadingPosts() ? 'Loading…' : 'Load sample posts' }}
+  <h3>Global Signal Store · cached posts</h3>
+  <p>Shared with MFE 2 through lib-state; the same dataset is fetched only once while fresh.</p>
+  <button type="button" (click)="loadPosts()" [disabled]="postsStore.loading()">
+    {{ postsStore.loading() ? 'Loading…' : 'Load sample posts' }}
   </button>
-  @if (postsError()) {
-    <p role="alert">{{ postsError() }}</p>
+  <button type="button" (click)="refreshPosts()" [disabled]="postsStore.loading()">Force refresh</button>
+  @if (postsStore.error()) {
+    <p role="alert">{{ postsStore.error() }}</p>
   }
+  <p>Cached posts: <strong data-testid="shared-post-count">{{ postsStore.posts()?.length ?? 0 }}</strong></p>
   <ul>
-    @for (post of posts(); track post.id) {
+    @for (post of postsStore.posts() ?? []; track post.id) {
       <li>{{ post.title }}</li>
     }
   </ul>
+
+  <h3>MFE-only state</h3>
+  <label for="mfe1-filter">Local filter</label>
+  <input id="mfe1-filter" #filterInput [value]="local.filter()" (input)="setLocalFilter(filterInput.value)" />
+  <p>Only in MFE1: {{ local.filter() }}</p>
 </app-ui-card>
