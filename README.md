@@ -13,6 +13,7 @@ apps/
 libs/
   lib-core/   Shared WorkspaceState service
   lib-ui/     Reusable standalone Card component
+  lib-state/  Shared Signal stores, typed API cache, feature and MFE state
   .../project.json    Each library and app owns its Nx targets
 tools/
   federation.config.mjs   Common singleton/dependency-sharing configuration
@@ -180,3 +181,34 @@ its other applications from the existing `gh-pages` site. Host updates recreate
 the clean-route entry pages and relative federation manifest. A new environment
 needs a complete host + mfe1 + mfe2 deployment first; an incomplete first deployment
 fails instead of publishing a broken site.
+
+## Shared Signal Store demo (PR #30)
+
+The custom state layer lives in `libs/lib-state`, **not** `lib-core` or `lib-ui`.
+It has no NgRx dependency. `SignalCache` implements typed in-memory caching,
+deterministic logical keys (`feature:resource:scope:sorted-params`),
+TTL, duplicate in-flight request reuse, targeted invalidation and cache clearing.
+Entries are only saved after successful responses. Cache keys must never contain tokens,
+passwords or other secrets; use a tenant/user scope where the data requires isolation.
+Wire `cache.clear()` into the host's logout/account-switch workflow.
+
+`PostsStore` is a `providedIn: 'root'` example, exposing readonly Angular
+signals for shared data, loading and error. MFE 1 calls the existing
+JSONPlaceholder demo API through the common `lib-core` HTTP providers and caches it;
+MFE 2 sees the cached posts and reuses the same data without another HTTP call.
+The cache is per host application page; standalone MFEs have their own root injectors.
+`MfeLocalStore` is provided in each remote component to demonstrate isolated
+local filters. It is cleared when that component is destroyed. Do not provide this
+local store at root.
+
+Open the host's MFE 1 route, click **Load sample posts**, then navigate to MFE 2.
+Both show the cached count. Click **Load or reuse posts** on MFE 2 and check Network:
+the API should not be called again while the entry is fresh. MFE 1 and MFE 2's
+local filters are intentionally independent.
+
+The federation shared mappings include `@workspace/lib-state` as singleton.
+A shared module identity alone is insufficient: all federated components must
+resolve their global stores from the same **host root injector**.
+For production use, replace the demo posts with feature stores using the same
+cache engine and add environment-specific API policies, cancellation and metrics.
+Cache stays in memory and is never persisted to localStorage/sessionStorage.
