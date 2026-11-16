@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { WorkspaceState } from '@workspace/lib-core';
+import { WorkspaceState, provideCoreHttp } from '@workspace/lib-core';
 import { App } from './app';
 
 describe('mfe2', () => {
   it('clears the shared selection', async () => {
+    TestBed.configureTestingModule({ providers: [provideCoreHttp()] });
     const fixture = TestBed.createComponent(App);
     const state = TestBed.inject(WorkspaceState);
     state.addItem();
