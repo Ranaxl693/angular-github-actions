@@ -2,7 +2,7 @@ import { Component, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { inject } from '@angular/core';
 import { WorkspaceState } from '@workspace/lib-core';
-import { Card } from '@workspace/lib-ui';
+import { Card } from '@workspace/lib-ui/card';
 import { environment } from '../environments/environment';
 
 @Component({

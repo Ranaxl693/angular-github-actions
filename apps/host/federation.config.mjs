@@ -1,3 +1,3 @@
 import { federationConfig } from '../../tools/federation.config.mjs';
 
-export default federationConfig('host', {});
+export default federationConfig('host', {}, ['@workspace/lib-ui/card']);

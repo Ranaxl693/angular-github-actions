@@ -4,7 +4,9 @@
   "root": "apps/host",
   "sourceRoot": "apps/host/src",
   "projectType": "application",
-  "tags": ["type:app"],
+  "tags": [
+    "type:app"
+  ],
   "targets": {
     "typecheck": {
       "executor": "nx:run-commands",
@@ -32,7 +34,9 @@
         "forwardAllArgs": false
       },
       "defaultConfiguration": "production",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}"
+      ],
       "configurations": {
         "production": {
           "command": "ng build host --configuration production",
@@ -56,5 +60,9 @@
       "continuous": true
     }
   },
-  "implicitDependencies": ["lib-core", "lib-ui", "lib-state"]
+  "implicitDependencies": [
+    "lib-core",
+    "ui-card",
+    "lib-state"
+  ]
 }

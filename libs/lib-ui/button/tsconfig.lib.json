@@ -1,8 +1,8 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../../tsconfig.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "../../dist/libs/lib-ui",
+    "outDir": "../../../dist/libs/lib-ui/button",
     "declaration": true,
     "declarationMap": true,
     "types": []

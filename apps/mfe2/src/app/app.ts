@@ -1,11 +1,11 @@
 import { Component, inject } from '@angular/core';
 import { WorkspaceState } from '@workspace/lib-core';
-import { Card } from '@workspace/lib-ui';
+import { Button } from '@workspace/lib-ui/button';
 import { MfeLocalStore, PostsStore } from '@workspace/lib-state';
 
 @Component({
   selector: 'app-mfe2',
-  imports: [Card],
+  imports: [Button],
   providers: [MfeLocalStore],
   templateUrl: './app.html',
   styleUrl: './app.css',
