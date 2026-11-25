@@ -12,6 +12,10 @@ const root = 'dist/angular-github-actions/browser';
 const card = 'libs/lib-ui/src/lib/card.ts';
 const angular = await readFile('angular.json','utf8');
 const original = await readFile(card,'utf8');
+const core = 'libs/lib-core/src/lib/workspace-state.ts';
+const state = 'libs/lib-state/src/lib/posts.store.ts';
+const originalCore = await readFile(core,'utf8');
+const originalState = await readFile(state,'utf8');
 const provider = 'apps/poc-ui-provider';
 const hash = async (dir) => {
  const out = {};
@@ -43,10 +47,49 @@ try {
    }
   }finally{await page.close();}
  };
+ const verifyState = async (increment, postTitle) => {
+  const context = await browser.newContext();
+  let requests = 0;
+  await context.route('https://jsonplaceholder.typicode.com/posts*', async route => {
+   requests++;
+   await route.fulfill({json:[{userId:1,id:1,title:'POC post',body:'mock'}]});
+  });
+  const page = await context.newPage();
+  const base='http://127.0.0.1:4400/angular-github-actions/cit/';
+  const expectText = async (locator,value) => {
+   await locator.waitFor();
+   for(let i=0;i<100;i++){
+    if((await locator.innerText()).trim()===String(value)) return;
+    await page.waitForTimeout(50);
+   }
+   assert.equal((await locator.innerText()).trim(),String(value));
+  };
+  try {
+   await page.goto(base);
+   await page.getByRole('link',{name:'MFE 1 · Products'}).click();
+   await page.getByRole('button',{name:'Add item'}).first().click();
+   await expectText(page.getByTestId('host-count'),increment);
+   await page.locator('#mfe1-filter').fill('only-one');
+   await page.getByRole('button',{name:'Load sample posts'}).click();
+   await expectText(page.getByTestId('shared-post-count'),1);
+   await page.getByText(postTitle,{exact:true}).waitFor();
+   await page.getByRole('link',{name:'MFE 2 · Selection'}).click();
+   await expectText(page.getByTestId('selection-count'),increment);
+   await expectText(page.getByTestId('mfe2-shared-post-count'),1);
+   await page.getByText(postTitle,{exact:true}).waitFor();
+   assert.equal(await page.locator('#mfe2-filter').inputValue(),'');
+   await page.getByRole('button',{name:'Load or reuse posts'}).click();
+   await expectText(page.getByTestId('mfe2-shared-post-count'),1);
+   assert.equal(requests,1,'Shared cache should avoid a second HTTP request');
+   await page.getByRole('button',{name:'Clear selection'}).click();
+   await expectText(page.getByTestId('host-count'),0);
+  }finally{await context.close();}
+ };
  await verify('rgb(242, 242, 242)');
+ await verifyState(1,'POC post');
  // Generate a minimal temporary Angular federation provider, not an existing consumer.
  await mkdir(provider+'/src',{recursive:true});
- await writeFile(provider+'/src/main.ts',"import { Card } from '@workspace/lib-ui';\nconsole.log('Runtime UI provider', Card);\n");
+ await writeFile(provider+'/src/main.ts',"import { Card } from '@workspace/lib-ui';\nimport { WorkspaceState } from '@workspace/lib-core';\nimport { PostsStore, MfeLocalStore } from '@workspace/lib-state';\nconsole.log('Runtime library provider', Card, WorkspaceState, PostsStore, MfeLocalStore);\n");
  await writeFile(provider+'/src/index.html','<!doctype html><html><head><base href="/"></head><body></body></html>');
  await put(provider+'/tsconfig.app.json',{extends:'../../tsconfig.json',compilerOptions:{types:[]},include:['src/**/*.ts']});
  await put(provider+'/tsconfig.federation.json',{extends:'./tsconfig.app.json',include:['src/**/*.d.ts']});
@@ -59,30 +102,51 @@ try {
  await put('angular.json',workspace);
  assert.ok(original.includes('#f2f2f2'));
  await writeFile(card,original.replace('#f2f2f2','#d1fae5'));
+ assert.ok(originalCore.includes('count + 1'));
+ await writeFile(core,originalCore.replace('count + 1','count + 2'));
+ const loader='this.http.get<DemoPost[]>(URL)';
+ assert.ok(originalState.includes(loader));
+ await writeFile(state,originalState.replace(loader,"this.http.get<DemoPost[]>(URL).pipe(map(posts => posts.map(post => ({ ...post, title: post.title + ' [runtime v2]' }))))").replace("import { HttpClient } from '@angular/common/http';","import { HttpClient } from '@angular/common/http';\nimport { map } from 'rxjs';"));
  run('ng','run','poc-ui-provider:build');
  const donor='dist/poc-ui-provider/browser';
  const entry=await json(donor+'/remoteEntry.json');
  const originalHostEntry=await readFile(root+'/remoteEntry.json','utf8');
  const hostEntry=JSON.parse(originalHostEntry);
- const findUi=e=>e.shared.find(x=>x.packageName==='@workspace/lib-ui');
- console.log('Host UI metadata:',findUi(hostEntry),'Provider UI metadata:',findUi(entry));
- const old=findUi(hostEntry), next=findUi(entry);
- assert.ok(old?.outFileName && next?.outFileName,'UI mapping not present in federation metadata');
- assert.equal(next.version,old.version,'This experiment tests same-contract replacement only');
  await cp(donor,root+'/poc-ui-v2',{recursive:true});
- old.outFileName='poc-ui-v2/'+next.outFileName;
- await put(root+'/remoteEntry.json',hostEntry);
+ // State may be provided by a remote rather than the shell. Redirect every existing
+ // metadata record for these mappings to the same independently built artifact.
+ const metadataPaths=[root+'/remoteEntry.json',...['mfe1','mfe2'].map(m=>root+'/remotes/'+m+'/remoteEntry.json')];
+ const originals=new Map();
+ for(const p of metadataPaths) originals.set(p,await readFile(p,'utf8'));
+ for(const name of ['@workspace/lib-ui','@workspace/lib-core','@workspace/lib-state']){
+  const next=entry.shared.find(x=>x.packageName===name);
+  assert.ok(next?.outFileName,'Provider mapping missing: '+name);
+  let found=0;
+  for(const p of metadataPaths){
+   const meta=await json(p);
+   const old=meta.shared.find(x=>x.packageName===name);
+   if(!old) continue;
+   assert.equal(next.version,old.version,'Same-contract replacement only');
+   old.outFileName=(p===metadataPaths[0]?'':'../../')+'poc-ui-v2/'+next.outFileName;
+   await put(p,meta); found++;
+  }
+  assert.ok(found,'Consumer mapping missing: '+name);
+ }
+
  // Prove every original consumer JS file is byte-for-byte unchanged.
  const after=await hash(root);
  for(const [p,h] of Object.entries(before)) assert.equal(after[p],h,p);
  await verify('rgb(209, 250, 229)');
+ await verifyState(2,'POC post [runtime v2]');
+ console.log('PASS: updated core singleton and state cache work across old consumers.');
  console.log('PASS: host and both remotes render updated UI without rebuilding consumer JS.');
  // Rollback by restoring metadata and verify a fresh browser page.
- await writeFile(root+'/remoteEntry.json',originalHostEntry);
+ for(const [p,contents] of originals) await writeFile(p,contents);
  await verify('rgb(242, 242, 242)');
+ await verifyState(1,'POC post');
  console.log('PASS: metadata rollback restores original UI.');
 } finally {
  await browser?.close(); server?.kill();
- await writeFile(card,original); await writeFile('angular.json',angular);
+ await writeFile(card,original); await writeFile(core,originalCore); await writeFile(state,originalState); await writeFile('angular.json',angular);
  await rm(provider,{recursive:true,force:true});
 }
