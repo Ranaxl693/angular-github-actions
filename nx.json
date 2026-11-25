@@ -22,5 +22,5 @@
     "test": { "cache": true, "inputs": ["default", "^default"] }
   },
   "analytics": false,
-  "nxCloudId": "6addb33846bda66aa5f490b2"
+  "neverConnectToCloud": true
 }
