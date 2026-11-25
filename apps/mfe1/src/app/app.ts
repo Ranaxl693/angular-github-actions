@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { WorkspaceState } from '@workspace/lib-core';
-import { Card } from '@workspace/lib-ui';
+import { Card } from '@workspace/ui-card';
 import { MfeLocalStore, PostsStore } from '@workspace/lib-state';
 
 @Component({

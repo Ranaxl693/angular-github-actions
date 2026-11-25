@@ -5,7 +5,8 @@
   "compilerOptions": {
     "paths": {
       "@workspace/lib-core": ["./libs/lib-core/src/index.ts"],
-      "@workspace/lib-ui": ["./libs/lib-ui/src/index.ts"],
+      "@workspace/ui-card": ["./libs/lib-ui/card/src/index.ts"],
+      "@workspace/ui-button": ["./libs/lib-ui/button/src/index.ts"],
       "@workspace/lib-state": ["./libs/lib-state/src/index.ts"]
     },
     "noImplicitOverride": true,
@@ -28,8 +29,10 @@
   "references": [
     { "path": "./libs/lib-core/tsconfig.lib.json" },
     { "path": "./libs/lib-core/tsconfig.spec.json" },
-    { "path": "./libs/lib-ui/tsconfig.lib.json" },
-    { "path": "./libs/lib-ui/tsconfig.spec.json" },
+    { "path": "./libs/lib-ui/card/tsconfig.lib.json" },
+    { "path": "./libs/lib-ui/card/tsconfig.spec.json" },
+    { "path": "./libs/lib-ui/button/tsconfig.lib.json" },
+    { "path": "./libs/lib-ui/button/tsconfig.spec.json" },
     { "path": "./libs/lib-state/tsconfig.lib.json" },
     { "path": "./libs/lib-state/tsconfig.spec.json" },
     {

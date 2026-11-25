@@ -1,6 +1,7 @@
-<app-ui-card title="MFE 2 · Selection">
+<section>
+  <h2>MFE 2 · Selection</h2>
   <p>Selected items: <strong data-testid="selection-count">{{ workspace.selectedCount() }}</strong></p>
-  <button type="button" (click)="workspace.clear()">Clear selection</button>
+  <app-ui-button label="Clear selection" (pressed)="workspace.clear()" />
 
   <h3>Shared global state from MFE 1</h3>
   <p>MFE 1 and MFE 2 read from the same root Signal Store in the host.</p>
@@ -21,4 +22,4 @@
   <label for="mfe2-filter">Local filter</label>
   <input id="mfe2-filter" #filterInput [value]="local.filter()" (input)="setLocalFilter(filterInput.value)" />
   <p>Only in MFE2: {{ local.filter() }}</p>
-</app-ui-card>
+</section>

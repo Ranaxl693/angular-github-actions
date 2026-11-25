@@ -432,20 +432,6 @@
         }
       }
     },
-    "lib-ui": {
-      "projectType": "library",
-      "root": "libs/lib-ui",
-      "sourceRoot": "libs/lib-ui/src",
-      "architect": {
-        "test": {
-          "builder": "@angular/build:unit-test",
-          "options": {
-            "buildTarget": "host:esbuild:development",
-            "tsConfig": "libs/lib-ui/tsconfig.spec.json"
-          }
-        }
-      }
-    },
     "lib-state": {
       "projectType": "library",
       "root": "libs/lib-state",
@@ -456,6 +442,34 @@
           "options": {
             "buildTarget": "host:esbuild:development",
             "tsConfig": "libs/lib-state/tsconfig.spec.json"
+          }
+        }
+      }
+    },
+    "ui-card": {
+      "projectType": "library",
+      "root": "libs/lib-ui/card",
+      "sourceRoot": "libs/lib-ui/card/src",
+      "architect": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "host:esbuild:development",
+            "tsConfig": "libs/lib-ui/card/tsconfig.spec.json"
+          }
+        }
+      }
+    },
+    "ui-button": {
+      "projectType": "library",
+      "root": "libs/lib-ui/button",
+      "sourceRoot": "libs/lib-ui/button/src",
+      "architect": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "host:esbuild:development",
+            "tsConfig": "libs/lib-ui/button/tsconfig.spec.json"
           }
         }
       }
