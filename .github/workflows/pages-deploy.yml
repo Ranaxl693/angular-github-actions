@@ -1,0 +1,52 @@
+name: Complete Pages deployment
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  NX_DAEMON: 'false'
+  NX_NO_CLOUD: 'true'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Build complete site once
+        run: npm run build:pages
+      - name: Verify complete site
+        run: |
+          test -s dist/angular-github-actions/browser/index.html
+          test -s dist/angular-github-actions/browser/remotes/mfe1/remoteEntry.json
+          test -s dist/angular-github-actions/browser/remotes/mfe2/remoteEntry.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/angular-github-actions/browser
+  deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

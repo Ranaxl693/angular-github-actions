@@ -1,4 +1,4 @@
-name: Nx Cloud POC (Multi Runner)
+name: Nx affected CI
 
 on:
   pull_request:
@@ -8,184 +8,35 @@ on:
 permissions:
   contents: read
 
-# Pin the comparison to this PR event on every runner.
-# Package scripts trace the expanded npx commands; npm banners stay suppressed.
+concurrency:
+  group: affected-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 env:
   NX_BASE: ${{ github.event.pull_request.base.sha }}
   NX_HEAD: ${{ github.sha }}
-  NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+  NX_DAEMON: 'false'
+  NX_NO_CLOUD: 'true'
 
 jobs:
-  type-check:
-    name: Type Check
+  validate:
+    name: ${{ matrix.target }} (affected)
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      NX_DAEMON: 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [typecheck, lint, test, build]
     steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Type Check (Nx affected)
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run --silent affected:projects
-          npm run --silent typecheck:affected
-  lint:
-    name: Lint
-    needs: type-check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      NX_DAEMON: 'false'
-    steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.sha }}
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint (Nx affected)
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run --silent affected:projects
-          npm run --silent lint:affected
-  unit-tests:
-    name: Unit Tests
-    needs: lint
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      NX_DAEMON: 'false'
-    steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.sha }}
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Unit Tests (Nx affected)
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run --silent affected:projects
-          npm run --silent test:affected
-  build:
-    name: Angular Build
-    needs: unit-tests
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      NX_DAEMON: 'false'
-    steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.sha }}
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
       - name: Show affected projects
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run --silent affected:projects | tee "$RUNNER_TEMP/affected-projects.json"
-      # Build all apps once to seed the remote cache for this POC.
-      - name: Seed application build cache
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx nx run-many -t build --projects=host,mfe1,mfe2 --configuration=pages --outputStyle=static
-
-  verify-remote-cache:
-    name: Verify cache on a fresh runner
-    needs: build
-    runs-on: ubuntu-latest
-    env:
-      NX_DAEMON: 'false'
-    steps:
-      - name: Checkout identical commit
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.sha }}
-      - name: Setup Node and npm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Restore builds through Nx Cloud
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx nx run-many -t build --projects=host,mfe1,mfe2 --configuration=pages --outputStyle=static
-      - name: Verify restored application outputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s dist/angular-github-actions/browser/index.html
-          test -s dist/apps/mfe1/browser/remoteEntry.json
-          test -s dist/apps/mfe2/browser/remoteEntry.json
-
-      - name: Package host and remotes for Pages
-        run: node tools/package-pages.mjs
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-      - name: Upload complete site
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: dist/angular-github-actions/browser
-
-  deploy-pages:
-    name: Deploy host and MFEs to GitHub Pages
-    needs: verify-remote-cache
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    concurrency:
-      group: github-pages
-      cancel-in-progress: false
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy complete site
-        id: deployment
-        uses: actions/deploy-pages@v4
+        run: npm run --silent affected:projects
+      - name: Execute affected target
+        run: npm run --silent ${{ matrix.target }}:affected

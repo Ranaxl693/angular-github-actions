@@ -9,4 +9,10 @@ After the migration is committed, validate dependency isolation with:
 
 Expected UI consumers: card → host, mfe1; button → mfe2. Inspect any additional graph edges if output differs. Run all lint, typecheck, test, and build targets for the initial migration, then repeat with isolated changes. Run federation e2e after building Pages artifacts.
 
-The existing CI workflow deliberately builds every app twice for remote cache verification and is not changed in this POC. For production affected-only CI, replace the explicit run-many build selection with affected tasks and preserve unchanged artifacts for deployment. A library used by every app still affects every app. This is not independent runtime library deployment.
+## CI policy
+
+PR validation runs lint, typecheck, test and build in four parallel jobs using Nx affected, with the same pinned base/head. Superseded PR runs are cancelled. Nx Cloud is disabled for these workflows; npm dependency caching remains enabled. No duplicate full-app cache-verification build or PR deployment is performed.
+
+GitHub Pages requires a complete site. A separate workflow builds and deploys the complete site once on develop pushes or manual dispatch. This intentionally does not deploy partial PR artifacts or overwrite unaffected applications. Independent production deployment requires a per-app artifact store or deployment target, which is outside this POC.
+
+A library used by every app still affects every app. Shared root configuration changes may also affect all apps. This is not independent runtime library deployment.
