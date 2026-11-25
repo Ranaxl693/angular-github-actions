@@ -5,6 +5,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+env:
+  NX_NO_CLOUD: 'true'
 jobs:
   verify:
     runs-on: ubuntu-latest
