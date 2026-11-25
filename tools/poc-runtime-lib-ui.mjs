@@ -46,7 +46,7 @@ try {
  await verify('rgb(242, 242, 242)');
  // Generate a minimal temporary Angular federation provider, not an existing consumer.
  await mkdir(provider+'/src',{recursive:true});
- await writeFile(provider+'/src/main.ts','export {};\n');
+ await writeFile(provider+'/src/main.ts',"import { Card } from '@workspace/lib-ui';\nconsole.log('Runtime UI provider', Card);\n");
  await writeFile(provider+'/src/index.html','<!doctype html><html><head><base href="/"></head><body></body></html>');
  await put(provider+'/tsconfig.app.json',{extends:'../../tsconfig.json',compilerOptions:{types:[]},include:['src/**/*.ts']});
  await put(provider+'/tsconfig.federation.json',{extends:'./tsconfig.app.json',include:['src/**/*.d.ts']});
@@ -65,6 +65,7 @@ try {
  const originalHostEntry=await readFile(root+'/remoteEntry.json','utf8');
  const hostEntry=JSON.parse(originalHostEntry);
  const findUi=e=>e.shared.find(x=>x.packageName==='@workspace/lib-ui');
+ console.log('Host UI metadata:',findUi(hostEntry),'Provider UI metadata:',findUi(entry));
  const old=findUi(hostEntry), next=findUi(entry);
  assert.ok(old?.outFileName && next?.outFileName,'UI mapping not present in federation metadata');
  assert.equal(next.version,old.version,'This experiment tests same-contract replacement only');
